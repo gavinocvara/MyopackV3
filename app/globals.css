@@ -1,0 +1,104 @@
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+:root {
+  --mp-bg: #07090B;
+  --mp-bg2: #0B1014;
+  --mp-s1: #10161B;
+  --mp-s2: #151D23;
+  --mp-s3: #1D2830;
+
+  --mp-t1: #F2F5F4;
+  --mp-t2: rgba(242, 245, 244, 0.72);
+  --mp-t3: rgba(242, 245, 244, 0.48);
+  --mp-t4: rgba(242, 245, 244, 0.28);
+
+  --mp-jade: #24D6A2;
+  --mp-teal: #2DD4BF;
+  --mp-amber: #F2B84B;
+  --mp-rose: #F87171;
+  --mp-sky: #75B8FF;
+  --mp-coral: #FC6558;
+
+  --mp-line: rgba(255, 255, 255, 0.065);
+  --mp-line2: rgba(255, 255, 255, 0.12);
+  --mp-expo: cubic-bezier(0.16, 1, 0.3, 1);
+}
+
+*, *::before, *::after {
+  box-sizing: border-box;
+  margin: 0;
+  padding: 0;
+}
+
+html {
+  background: var(--mp-bg);
+  color: var(--mp-t1);
+  -webkit-text-size-adjust: 100%;
+}
+
+body {
+  min-height: 100%;
+  background:
+    radial-gradient(circle at 50% -10%, rgba(36, 214, 162, 0.08), transparent 34rem),
+    linear-gradient(180deg, var(--mp-bg), #050607 72%);
+  color: var(--mp-t1);
+  font-family: Inter, ui-sans-serif, system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
+  -webkit-font-smoothing: antialiased;
+  overflow-x: hidden;
+}
+
+button,
+select,
+input {
+  font: inherit;
+}
+
+button {
+  cursor: pointer;
+  -webkit-tap-highlight-color: transparent;
+}
+
+::-webkit-scrollbar {
+  width: 0;
+}
+
+@keyframes live-pulse {
+  0%, 100% { opacity: 1; transform: scale(1); }
+  50% { opacity: 0.35; transform: scale(0.7); }
+}
+
+@keyframes fade-up {
+  from { opacity: 0; transform: translateY(12px); }
+  to { opacity: 1; transform: translateY(0); }
+}
+
+@keyframes shimmer {
+  0% { background-position: -200% 0; }
+  100% { background-position: 200% 0; }
+}
+
+.live-dot {
+  animation: live-pulse 1.6s ease-in-out infinite;
+}
+
+.fade-up {
+  animation: fade-up 0.45s var(--mp-expo) both;
+}
+
+.skeleton {
+  background: linear-gradient(90deg, var(--mp-s1) 25%, var(--mp-s2) 50%, var(--mp-s1) 75%);
+  background-size: 200% 100%;
+  animation: shimmer 1.5s ease-in-out infinite;
+  border-radius: 8px;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  *, *::before, *::after {
+    animation-duration: 0.01ms !important;
+    animation-iteration-count: 1 !important;
+    scroll-behavior: auto !important;
+    transition-duration: 0.01ms !important;
+  }
+}

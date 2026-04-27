@@ -1,0 +1,15 @@
+
+> myopack-web@1.0.0 dev
+> next dev
+
+  ▲ Next.js 14.2.5
+  - Local:        http://localhost:3000
+
+ ✓ Starting...
+ ✓ Ready in 3.4s
+ ○ Compiling /today ...
+ ✓ Compiled /today in 10.1s (2429 modules)
+ GET /today 200 in 10705ms
+ ✓ Compiled in 1168ms (1221 modules)
+ ✓ Compiled in 411ms (1207 modules)
+[?25h
