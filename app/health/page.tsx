@@ -2,7 +2,7 @@
 
 import { useEffect, useMemo, useState } from 'react'
 import { motion } from 'framer-motion'
-import { BrainCircuit, CalendarDays, Clock3, Sparkles, Target, TrendingUp } from 'lucide-react'
+import { BrainCircuit, CalendarDays, ChevronLeft, ChevronRight, Clock3, Sparkles, Target, TrendingUp } from 'lucide-react'
 import { useEMG } from '@/lib/emg/context'
 import { useMuscleSelection } from '@/lib/muscle-selection-context'
 import {
@@ -82,41 +82,48 @@ function formatRecordDateTime(value: string) {
   })
 }
 
-function calendarKey(date: Date, view: CalendarView) {
+function dayKey(date: Date) {
   const year = date.getFullYear()
   const month = `${date.getMonth() + 1}`.padStart(2, '0')
   const day = `${date.getDate()}`.padStart(2, '0')
-  if (view === 'year') return `${year}`
-  if (view === 'month') return `${year}-${month}`
   return `${year}-${month}-${day}`
 }
 
-function calendarLabel(date: Date, view: CalendarView) {
-  if (view === 'year') return date.toLocaleDateString(undefined, { year: 'numeric' })
-  if (view === 'month') return date.toLocaleDateString(undefined, { month: 'long', year: 'numeric' })
-  return date.toLocaleDateString(undefined, { weekday: 'short', month: 'short', day: 'numeric' })
+function monthKey(date: Date) {
+  const year = date.getFullYear()
+  const month = `${date.getMonth() + 1}`.padStart(2, '0')
+  return `${year}-${month}`
 }
 
-function groupRecordsByCalendar(records: SessionRecord[], view: CalendarView) {
-  const groups = new Map<string, { label: string; records: SessionRecord[] }>()
-  records.forEach((record) => {
-    const date = new Date(record.timestamp)
-    if (Number.isNaN(date.getTime())) return
-    const key = calendarKey(date, view)
-    const existing = groups.get(key) ?? { label: calendarLabel(date, view), records: [] }
-    existing.records.push(record)
-    groups.set(key, existing)
-  })
+function yearKey(date: Date) {
+  return `${date.getFullYear()}`
+}
 
-  return Array.from(groups.entries())
-    .sort(([a], [b]) => b.localeCompare(a))
-    .map(([key, group]) => ({
-      key,
-      label: group.label,
-      records: group.records
-        .slice()
-        .sort((a, b) => new Date(b.timestamp).getTime() - new Date(a.timestamp).getTime()),
-    }))
+function isSameMonth(a: Date, b: Date) {
+  return a.getFullYear() === b.getFullYear() && a.getMonth() === b.getMonth()
+}
+
+function getMonthGridDays(anchor: Date) {
+  const first = new Date(anchor.getFullYear(), anchor.getMonth(), 1)
+  const start = new Date(first)
+  start.setDate(first.getDate() - first.getDay())
+  return Array.from({ length: 42 }, (_, index) => {
+    const date = new Date(start)
+    date.setDate(start.getDate() + index)
+    return date
+  })
+}
+
+function sortedRecords(records: SessionRecord[]) {
+  return records
+    .slice()
+    .sort((a, b) => new Date(b.timestamp).getTime() - new Date(a.timestamp).getTime())
+}
+
+function averageRunScore(records: SessionRecord[]): number | null {
+  if (records.length === 0) return null
+  const total = records.reduce((sum, record) => sum + (record.symmetry ?? record.activation), 0)
+  return total / records.length
 }
 
 function severityColor(severity: ImbalanceSeverity, risk: RecoveryRisk) {
@@ -137,7 +144,9 @@ export default function HealthPage() {
   const { emgData } = useEMG()
   const { selectedGroup, sideMode, channelRoute } = useMuscleSelection()
   const [records, setRecords] = useState<SessionRecord[]>([])
-  const [calendarView, setCalendarView] = useState<CalendarView>('day')
+  const [calendarView, setCalendarView] = useState<CalendarView>('month')
+  const [visibleDate, setVisibleDate] = useState(() => new Date())
+  const [selectedDay, setSelectedDay] = useState(() => dayKey(new Date()))
   const region = getMuscleRegion(selectedGroup ?? 'quads')
   const values = getRouteValues(emgData, channelRoute)
   const activation = getSideActivation(values, sideMode)
@@ -148,9 +157,29 @@ export default function HealthPage() {
     [records, region.id]
   )
   const latestSevenRuns = useMemo(() => regionRecords.slice(-7), [regionRecords])
-  const calendarGroups = useMemo(
-    () => groupRecordsByCalendar(regionRecords, calendarView),
-    [calendarView, regionRecords]
+  const recordsByDay = useMemo(() => {
+    const map = new Map<string, SessionRecord[]>()
+    regionRecords.forEach((record) => {
+      const date = new Date(record.timestamp)
+      if (Number.isNaN(date.getTime())) return
+      const key = dayKey(date)
+      map.set(key, [...(map.get(key) ?? []), record])
+    })
+    return map
+  }, [regionRecords])
+  const recordsByMonth = useMemo(() => {
+    const map = new Map<string, SessionRecord[]>()
+    regionRecords.forEach((record) => {
+      const date = new Date(record.timestamp)
+      if (Number.isNaN(date.getTime())) return
+      const key = monthKey(date)
+      map.set(key, [...(map.get(key) ?? []), record])
+    })
+    return map
+  }, [regionRecords])
+  const selectedDayRecords = useMemo(
+    () => sortedRecords(recordsByDay.get(selectedDay) ?? []),
+    [recordsByDay, selectedDay]
   )
   const avgRegionScore = averageScore(regionRecords)
   const regionDelta = trendDelta(regionRecords)
@@ -172,6 +201,15 @@ export default function HealthPage() {
     }
   }, [])
 
+  useEffect(() => {
+    const latest = regionRecords[regionRecords.length - 1]
+    if (!latest) return
+    const date = new Date(latest.timestamp)
+    if (Number.isNaN(date.getTime())) return
+    setVisibleDate(date)
+    setSelectedDay(dayKey(date))
+  }, [region.id, regionRecords])
+
   const week = latestSevenRuns.length > 0
     ? latestSevenRuns.map((record) => ({
         day: formatRecordDate(record.timestamp),
@@ -186,6 +224,25 @@ export default function HealthPage() {
         { day: 'S', score: Math.round(progressScore) },
         { day: 'S', score: null as number | null },
       ]
+  const monthDays = getMonthGridDays(visibleDate)
+  const monthLabel = visibleDate.toLocaleDateString(undefined, { month: 'long', year: 'numeric' })
+  const selectedDayDate = new Date(`${selectedDay}T12:00:00`)
+  const selectedDayLabel = Number.isNaN(selectedDayDate.getTime())
+    ? 'Selected day'
+    : selectedDayDate.toLocaleDateString(undefined, { weekday: 'long', month: 'long', day: 'numeric' })
+  const year = visibleDate.getFullYear()
+
+  const moveCalendar = (amount: number) => {
+    setVisibleDate((current) => {
+      const next = new Date(current)
+      if (calendarView === 'year') {
+        next.setFullYear(current.getFullYear() + amount)
+      } else {
+        next.setMonth(current.getMonth() + amount)
+      }
+      return next
+    })
+  }
 
   return (
     <motion.div
@@ -519,7 +576,7 @@ export default function HealthPage() {
               Recovery calendar
             </p>
             <p className="mt-2 text-[11px] leading-5" style={{ color: 'var(--mp-t3)' }}>
-              Saved runs are grouped by the moment each attempt began.
+              Tap a date to reveal only the attempts from that day.
             </p>
           </div>
           <div className="grid grid-cols-3 gap-1 rounded-xl p-1" style={{ background: 'rgba(255,255,255,0.045)', border: '1px solid var(--mp-line)' }}>
@@ -546,44 +603,165 @@ export default function HealthPage() {
             No saved {region.label.toLowerCase()} runs yet. End a monitoring session on the Monitor page to create the first local record.
           </p>
         ) : (
-          <div className="flex flex-col gap-3">
-            {calendarGroups.map((group) => (
-              <div key={group.key} className="rounded-2xl p-3" style={{ background: 'rgba(255,255,255,0.035)', border: '1px solid var(--mp-line)' }}>
-                <div className="mb-3 flex items-center justify-between gap-3">
-                  <p className="text-sm font-black" style={{ color: 'var(--mp-t1)' }}>
-                    {group.label}
-                  </p>
-                  <span className="font-mono text-[10px] font-black uppercase tracking-[0.12em]" style={{ color: 'var(--mp-t4)' }}>
-                    {group.records.length} run{group.records.length === 1 ? '' : 's'}
-                  </span>
-                </div>
-                <div className="grid gap-2">
-                  {group.records.map((record) => {
-                    const score = record.symmetry ?? record.activation
+          <div className="flex flex-col gap-4">
+            <div className="flex items-center justify-between gap-3 rounded-2xl px-3 py-2" style={{ background: 'rgba(0,0,0,0.14)', border: '1px solid var(--mp-line)' }}>
+              <button
+                onClick={() => moveCalendar(-1)}
+                aria-label={calendarView === 'year' ? 'Previous year' : 'Previous month'}
+                className="grid h-9 w-9 place-items-center rounded-xl"
+                style={{ color: 'var(--mp-t3)', background: 'rgba(255,255,255,0.035)' }}
+              >
+                <ChevronLeft size={16} />
+              </button>
+              <div className="text-center">
+                <p className="text-sm font-black" style={{ color: 'var(--mp-t1)' }}>
+                  {calendarView === 'year' ? year : monthLabel}
+                </p>
+                <p className="mt-1 font-mono text-[10px] font-black uppercase tracking-[0.12em]" style={{ color: 'var(--mp-t4)' }}>
+                  {regionRecords.length} retained run{regionRecords.length === 1 ? '' : 's'}
+                </p>
+              </div>
+              <button
+                onClick={() => moveCalendar(1)}
+                aria-label={calendarView === 'year' ? 'Next year' : 'Next month'}
+                className="grid h-9 w-9 place-items-center rounded-xl"
+                style={{ color: 'var(--mp-t3)', background: 'rgba(255,255,255,0.035)' }}
+              >
+                <ChevronRight size={16} />
+              </button>
+            </div>
+
+            {calendarView === 'year' ? (
+              <div className="grid grid-cols-3 gap-2">
+                {Array.from({ length: 12 }, (_, month) => {
+                  const date = new Date(year, month, 1)
+                  const key = monthKey(date)
+                  const monthRecords = recordsByMonth.get(key) ?? []
+                  const avg = averageRunScore(monthRecords)
+                  return (
+                    <button
+                      key={key}
+                      onClick={() => {
+                        setVisibleDate(date)
+                        setCalendarView('month')
+                      }}
+                      className="rounded-2xl px-2 py-3 text-left"
+                      style={{
+                        minHeight: 78,
+                        background: monthRecords.length > 0 ? 'rgba(36,214,162,0.10)' : 'rgba(255,255,255,0.035)',
+                        border: `1px solid ${monthRecords.length > 0 ? 'rgba(36,214,162,0.28)' : 'var(--mp-line)'}`,
+                        color: monthRecords.length > 0 ? 'var(--mp-jade)' : 'var(--mp-t4)',
+                      }}
+                    >
+                      <span className="block text-xs font-black">
+                        {date.toLocaleDateString(undefined, { month: 'short' })}
+                      </span>
+                      <span className="mt-3 block font-mono text-lg font-black">
+                        {monthRecords.length}
+                      </span>
+                      <span className="block text-[9px] font-bold uppercase tracking-[0.12em]" style={{ color: 'var(--mp-t4)' }}>
+                        {avg === null ? 'no runs' : `${Math.round(avg)} avg`}
+                      </span>
+                    </button>
+                  )
+                })}
+              </div>
+            ) : (
+              <>
+                <div className="grid grid-cols-7 gap-1">
+                  {['S', 'M', 'T', 'W', 'T', 'F', 'S'].map((day, index) => (
+                    <span key={`${day}-${index}`} className="py-1 text-center text-[9px] font-black uppercase tracking-[0.12em]" style={{ color: 'var(--mp-t4)' }}>
+                      {day}
+                    </span>
+                  ))}
+                  {monthDays.map((date) => {
+                    const key = dayKey(date)
+                    const dayRecords = recordsByDay.get(key) ?? []
+                    const selected = selectedDay === key
+                    const inMonth = isSameMonth(date, visibleDate)
+                    const avg = averageRunScore(dayRecords)
                     return (
-                      <div key={record.id} className="rounded-xl px-3 py-2" style={{ background: 'rgba(0,0,0,0.14)' }}>
-                        <div className="flex items-center justify-between gap-3">
-                          <span className="font-mono text-[11px] font-bold" style={{ color: 'var(--mp-t2)' }}>
-                            {calendarView === 'day' ? formatRecordTime(record.timestamp) : formatRecordDateTime(record.timestamp)}
+                      <button
+                        key={key}
+                        onClick={() => {
+                          setSelectedDay(key)
+                          if (!inMonth) setVisibleDate(date)
+                          if (calendarView === 'month') return
+                          setCalendarView('day')
+                        }}
+                        className="rounded-xl p-1 text-left"
+                        style={{
+                          minHeight: 50,
+                          background: selected
+                            ? 'rgba(36,214,162,0.16)'
+                            : dayRecords.length > 0
+                              ? 'rgba(255,255,255,0.065)'
+                              : 'rgba(255,255,255,0.025)',
+                          border: `1px solid ${selected ? 'rgba(36,214,162,0.45)' : 'var(--mp-line)'}`,
+                          color: inMonth ? 'var(--mp-t2)' : 'var(--mp-t4)',
+                          opacity: inMonth ? 1 : 0.45,
+                        }}
+                      >
+                        <span className="block text-[11px] font-black">{date.getDate()}</span>
+                        {dayRecords.length > 0 && (
+                          <span
+                            className="mt-2 block h-1.5 rounded-full"
+                            style={{ background: avg === null ? 'var(--mp-t4)' : scoreColor(avg) }}
+                          />
+                        )}
+                        {dayRecords.length > 1 && (
+                          <span className="mt-1 block font-mono text-[9px] font-black" style={{ color: 'var(--mp-jade)' }}>
+                            {dayRecords.length}
                           </span>
-                          <span className="font-mono text-xs font-bold" style={{ color: scoreColor(score) }}>
-                            {Math.round(score)}%
-                          </span>
-                        </div>
-                        <div className="mt-1 flex items-center justify-between gap-3">
-                          <span className="text-[10px] font-bold uppercase tracking-[0.12em]" style={{ color: 'var(--mp-t4)' }}>
-                            {record.sideMode}
-                          </span>
-                          <span className="text-[10px] font-semibold" style={{ color: 'var(--mp-t3)' }}>
-                            started {formatRecordDateTime(record.timestamp)}
-                          </span>
-                        </div>
-                      </div>
+                        )}
+                      </button>
                     )
                   })}
                 </div>
-              </div>
-            ))}
+
+                <div className="rounded-2xl p-3" style={{ background: 'rgba(255,255,255,0.035)', border: '1px solid var(--mp-line)' }}>
+                  <div className="mb-3 flex items-center justify-between gap-3">
+                    <p className="text-sm font-black" style={{ color: 'var(--mp-t1)' }}>
+                      {selectedDayLabel}
+                    </p>
+                    <span className="font-mono text-[10px] font-black uppercase tracking-[0.12em]" style={{ color: 'var(--mp-t4)' }}>
+                      {selectedDayRecords.length} run{selectedDayRecords.length === 1 ? '' : 's'}
+                    </span>
+                  </div>
+                  {selectedDayRecords.length === 0 ? (
+                    <p className="text-xs leading-5" style={{ color: 'var(--mp-t3)' }}>
+                      No saved attempts on this date.
+                    </p>
+                  ) : (
+                    <div className="grid gap-2">
+                      {selectedDayRecords.map((record) => {
+                        const score = record.symmetry ?? record.activation
+                        return (
+                          <div key={record.id} className="rounded-xl px-3 py-2" style={{ background: 'rgba(0,0,0,0.14)' }}>
+                            <div className="flex items-center justify-between gap-3">
+                              <span className="font-mono text-[11px] font-bold" style={{ color: 'var(--mp-t2)' }}>
+                                {formatRecordTime(record.timestamp)}
+                              </span>
+                              <span className="font-mono text-xs font-bold" style={{ color: scoreColor(score) }}>
+                                {Math.round(score)}%
+                              </span>
+                            </div>
+                            <div className="mt-1 flex items-center justify-between gap-3">
+                              <span className="text-[10px] font-bold uppercase tracking-[0.12em]" style={{ color: 'var(--mp-t4)' }}>
+                                {record.sideMode}
+                              </span>
+                              <span className="text-[10px] font-semibold" style={{ color: 'var(--mp-t3)' }}>
+                                started {formatRecordDateTime(record.timestamp)}
+                              </span>
+                            </div>
+                          </div>
+                        )
+                      })}
+                    </div>
+                  )}
+                </div>
+              </>
+            )}
           </div>
         )}
       </section>

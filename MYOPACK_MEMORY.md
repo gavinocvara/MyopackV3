@@ -1,6 +1,6 @@
 # MyoPack Memory / Handoff
 
-Last updated: 2026-04-27 20:50:18 -05:00
+Last updated: 2026-04-27 21:27:34 -05:00
 
 ## Current architecture
 
@@ -151,6 +151,39 @@ Last updated: 2026-04-27 20:50:18 -05:00
 ---
 
 ## Contribution log
+
+### Session: Compact recovery calendar and hosted ESP32 connection guard
+**Date/time:** 2026-04-27 21:27:34 -05:00  
+**Model:** GPT-5 Codex  
+**Author type:** Codex acting as Session History Auditor + Browser QA and Touch Auditor + Device Protocol Liaison
+
+#### Scope
+
+This session corrected the Recovery calendar interaction and clarified the deployed Vercel-to-ESP32 connection failure mode:
+
+- Recovery should retain attempts for coaching, but not render every attempt as a long on-page list.
+- Users should be able to click a calendar date to reveal attempts for that date only.
+- The Vercel deployment cannot directly connect to the current ESP32 WebSocket server because Vercel serves HTTPS and the firmware serves insecure `ws://` on port 81.
+
+#### Files changed
+
+- `app/health/page.tsx`: replaced the grouped long Recovery Calendar list with a compact calendar interaction. Month view shows a real 6-week calendar grid with run markers and counts. Clicking a date reveals only that date's attempts. Year view shows month tiles and jumps back into month view. Day/month/year controls remain available.
+- `components/device/device-connect.tsx`: added a hosted HTTPS guard. On Vercel or any non-local HTTPS host, the modal explains that plain ESP32 `ws://` direct links are blocked by mobile browsers as mixed-security connections. The app still permits `wss://` targets for a future trusted relay/TLS path and keeps local HTTP/LAN demos working.
+
+#### Verification
+
+- `npm.cmd run test:emg`: passed.
+- `npm.cmd run lint`: passed.
+- `npm.cmd run build`: passed on Next.js 14.2.35.
+- Mobile smoke check with seeded local session history confirmed that 18 stored attempts do not render as 18 visible rows; only the selected day opens, and Year view exposes month tiles.
+
+#### Important device-link note
+
+The current deployed Vercel app cannot directly open `ws://<esp32-ip>:81` from a phone, even when the phone and ESP32 are on the same hotspot. This is a browser security rule, not a MyoPack routing bug. A true Vercel-hosted live-device path requires one of:
+
+- a cloud relay the ESP32 connects to outbound over HTTPS/WSS and the app reads from securely;
+- trusted TLS/WSS on the ESP32 with a certificate the phone browser accepts;
+- or using the existing direct WebSocket path from a local HTTP app URL on the same LAN/hotspot.
 
 ### Session: Dependency patch, mobile modal, and recovery calendar history
 **Date/time:** 2026-04-27 20:50:18 -05:00  
