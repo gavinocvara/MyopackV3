@@ -20,6 +20,8 @@ export function DeviceConnectModal({ open, onClose }: DeviceConnectModalProps) {
   } = useEMG()
 
   const [input, setInput] = useState(deviceAddress || '')
+  const [isHostedHttps, setIsHostedHttps] = useState(false)
+  const [connectionNotice, setConnectionNotice] = useState<string | null>(null)
   const inputRef = useRef<HTMLInputElement | null>(null)
 
   // When the modal opens, seed the input with the last-known address
@@ -27,10 +29,22 @@ export function DeviceConnectModal({ open, onClose }: DeviceConnectModalProps) {
   useEffect(() => {
     if (open) {
       setInput(deviceAddress || '')
+      setConnectionNotice(null)
       const id = setTimeout(() => inputRef.current?.focus(), 80)
       return () => clearTimeout(id)
     }
   }, [open, deviceAddress])
+
+  useEffect(() => {
+    if (typeof window === 'undefined') return
+    const host = window.location.hostname
+    setIsHostedHttps(
+      window.location.protocol === 'https:' &&
+        host !== 'localhost' &&
+        host !== '127.0.0.1' &&
+        host !== '[::1]'
+    )
+  }, [])
 
   // Close on Escape
   useEffect(() => {
@@ -45,6 +59,13 @@ export function DeviceConnectModal({ open, onClose }: DeviceConnectModalProps) {
   const handleConnect = () => {
     const target = input.trim()
     if (!target) return
+    const isSecureTarget = target.startsWith('wss://')
+    if (isHostedHttps && !isSecureTarget) {
+      setConnectionNotice(
+        'This hosted Vercel app is HTTPS, but the ESP32 streams plain ws:// on port 81. Mobile browsers block that mixed-security connection before MyoPack can read the device.'
+      )
+      return
+    }
     connectDevice(target)
   }
 
@@ -237,10 +258,57 @@ export function DeviceConnectModal({ open, onClose }: DeviceConnectModalProps) {
                   marginTop: 8, lineHeight: 1.5,
                 }}
               >
-                Serial monitor prints the IP after the device joins WiFi.
-                Port 81 is assumed.
+                Serial monitor prints the IP after the device joins WiFi. Port 81 is assumed for local HTTP demos.
               </p>
             </div>
+
+            {isHostedHttps && (
+              <div
+                style={{
+                  marginTop: 14,
+                  borderRadius: 14,
+                  padding: 12,
+                  background: 'rgba(242,184,75,0.10)',
+                  border: '1px solid rgba(242,184,75,0.24)',
+                }}
+              >
+                <p
+                  style={{
+                    marginBottom: 6,
+                    fontSize: 9,
+                    letterSpacing: '0.14em',
+                    textTransform: 'uppercase',
+                    color: 'var(--mp-amber)',
+                    fontWeight: 800,
+                  }}
+                >
+                  Hosted app limit
+                </p>
+                <p style={{ fontSize: 11, lineHeight: 1.55, color: 'var(--mp-t2)' }}>
+                  Vercel serves this page over HTTPS. Direct ESP32 links use insecure ws://, so the browser blocks them on phones.
+                  For a live LAN demo, run the app locally over HTTP on a laptop connected to the same hotspot and open that laptop IP on the phone.
+                  A Vercel-hosted live device path needs a WSS/cloud relay or trusted TLS on the device.
+                </p>
+              </div>
+            )}
+
+            {connectionNotice && (
+              <div
+                role="status"
+                style={{
+                  marginTop: 12,
+                  borderRadius: 12,
+                  padding: 10,
+                  background: 'rgba(248,113,113,0.10)',
+                  border: '1px solid rgba(248,113,113,0.24)',
+                  color: 'var(--mp-rose)',
+                  fontSize: 11,
+                  lineHeight: 1.5,
+                }}
+              >
+                {connectionNotice}
+              </div>
+            )}
 
             {/* Actions */}
             <div style={{ marginTop: 18, display: 'flex', flexDirection: 'column', gap: 10 }}>
