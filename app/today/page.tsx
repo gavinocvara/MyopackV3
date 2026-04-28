@@ -1,6 +1,6 @@
 'use client'
 
-import { useEffect } from 'react'
+import { useEffect, useRef } from 'react'
 import { AnimatePresence, motion } from 'framer-motion'
 import { Activity, ChevronLeft } from 'lucide-react'
 import { useEMG } from '@/lib/emg/context'
@@ -168,6 +168,7 @@ function statusCopy(status: 'optimal' | 'caution' | 'alert') {
 }
 
 export default function TodayPage() {
+  const sessionStartedAtRef = useRef<string | null>(null)
   const {
     emgData,
     isMonitoring,
@@ -237,6 +238,7 @@ export default function TodayPage() {
     if (!isMonitoring && !canStartSession) return
     if (isMonitoring && sessionTime > 0 && selectedGroup) {
       saveSessionRecord({
+        startedAt: sessionStartedAtRef.current ?? new Date(Date.now() - sessionTime * 1000).toISOString(),
         muscleGroup: selectedGroup,
         sideMode,
         sensorPair,
@@ -252,6 +254,9 @@ export default function TodayPage() {
         parseErrors: dataSource === 'device' ? deviceDiagnostics.parseErrors : 0,
         precheckScore: readiness.score,
       })
+      sessionStartedAtRef.current = null
+    } else if (!isMonitoring) {
+      sessionStartedAtRef.current = new Date().toISOString()
     }
     toggleMonitoring()
   }
@@ -523,7 +528,10 @@ export default function TodayPage() {
                       %
                     </span>
                   </div>
-                  <p className="mt-3 text-sm font-semibold" style={{ color: 'var(--mp-t2)' }}>
+                  <p
+                    className="mt-3 text-sm font-semibold"
+                    style={{ color: 'var(--mp-t2)', minHeight: 44, lineHeight: '22px', maxWidth: 210 }}
+                  >
                     {sideMode === 'bilateral' ? `${Math.round(values.symmetry)}% symmetry · ${statusCopy(status)}` : `${phase.label} single-side contraction`}
                   </p>
                 </div>

@@ -86,29 +86,41 @@ export function DeviceConnectModal({ open, onClose }: DeviceConnectModalProps) {
             }}
           />
 
-          {/* Sheet */}
-          <motion.div
-            key="sheet"
-            initial={{ opacity: 0, y: 24, scale: 0.98 }}
-            animate={{ opacity: 1, y: 0, scale: 1 }}
-            exit={{ opacity: 0, y: 24, scale: 0.98 }}
-            transition={{ duration: 0.26, ease: [0.16, 1, 0.3, 1] }}
-            role="dialog"
-            aria-modal="true"
-            aria-label="Connect MyoPack device"
+          <div
             style={{
               position: 'fixed',
-              top: '50%', left: '50%',
-              transform: 'translate(-50%, -50%)',
-              width: 'min(92vw, 380px)',
+              inset: 0,
               zIndex: 100,
-              background: 'var(--mp-s1)',
-              border: '1px solid var(--mp-line2)',
-              borderRadius: 22,
-              padding: 24,
-              boxShadow: '0 24px 64px rgba(0,0,0,0.6), 0 0 0 1px rgba(255,255,255,0.03)',
+              display: 'flex',
+              alignItems: 'center',
+              justifyContent: 'center',
+              padding: 'calc(env(safe-area-inset-top, 0px) + 16px) 14px calc(env(safe-area-inset-bottom, 0px) + 16px)',
+              pointerEvents: 'none',
             }}
           >
+            {/* Sheet */}
+            <motion.div
+              key="sheet"
+              initial={{ opacity: 0, y: 24, scale: 0.98 }}
+              animate={{ opacity: 1, y: 0, scale: 1 }}
+              exit={{ opacity: 0, y: 24, scale: 0.98 }}
+              transition={{ duration: 0.26, ease: [0.16, 1, 0.3, 1] }}
+              role="dialog"
+              aria-modal="true"
+              aria-label="Connect MyoPack device"
+              style={{
+                width: 'min(100%, 380px)',
+                maxHeight: 'min(620px, calc(100dvh - 32px - env(safe-area-inset-top, 0px) - env(safe-area-inset-bottom, 0px)))',
+                overflowY: 'auto',
+                zIndex: 100,
+                background: 'var(--mp-s1)',
+                border: '1px solid var(--mp-line2)',
+                borderRadius: 22,
+                padding: 24,
+                boxShadow: '0 24px 64px rgba(0,0,0,0.6), 0 0 0 1px rgba(255,255,255,0.03)',
+                pointerEvents: 'auto',
+              }}
+            >
             {/* Header */}
             <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 6 }}>
               <div>
@@ -280,7 +292,8 @@ export function DeviceConnectModal({ open, onClose }: DeviceConnectModalProps) {
                 {dataSource === 'simulated' ? 'Using Simulation' : 'Use Simulation Instead'}
               </button>
             </div>
-          </motion.div>
+            </motion.div>
+          </div>
         </>
       )}
     </AnimatePresence>
