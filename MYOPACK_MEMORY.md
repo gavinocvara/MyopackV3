@@ -550,3 +550,42 @@ Hardware/electrode/placement dependent:
 - Whether floating or unplugged electrodes produce enough noise to look active.
 - ADS placement, reference placement, gain, and contact quality.
 - Whether 500 SPS and current 20-150 Hz envelope are sufficient for the first live capstone demo.
+
+---
+
+### Session: Vercel-hosted Ably live-sync implementation
+**Date/time:** 2026-04-27 21:50:27 -05:00
+**Model:** GPT-5 Codex
+**Author type:** Codex acting as Cloud Relay Integrator + Device Protocol Engineer + Vercel Release Engineer
+
+#### Scope
+
+Implemented the true hosted live-sync path requested by the user. The app no longer depends on a phone browser opening an insecure private `ws://` ESP32 socket from a Vercel HTTPS page. The new production path is ESP32 outbound MQTT/TLS to Ably and browser Ably Realtime subscription through a server-issued token.
+
+#### Updates
+
+- Added Ably to the Next.js app and created `/api/ably-token` so Vercel can issue short-lived browser token requests from server-only `ABLY_API_KEY`.
+- Added an Ably relay client that subscribes to `myopack:<device-id>:telemetry`, publishes label commands to `myopack:<device-id>:control`, and routes all telemetry through the existing normalized parser and diagnostics path.
+- Added `relay` as a third data source beside `simulated` and LAN `device`, preserving the existing LAN WebSocket fallback for bench/local testing.
+- Reworked Device Link into Cloud Relay and Local LAN modes, with Cloud Relay as the Vercel-ready path and hosted HTTPS warnings scoped to LAN mode.
+- Updated Monitor/Signal metadata so relay sessions report relay/device diagnostics instead of looking like simulation.
+- Added firmware Ably MQTT/TLS relay module using `WiFiClientSecure` + `PubSubClient`; relay is disabled by default until local secrets are supplied.
+- Added `firmware/src/secrets.example.h` and ignored real `firmware/src/secrets.h` so no Ably credentials are committed.
+- Added `scripts/ably-relay-smoke.mjs` and `npm run test:relay` for publishing a one-frame Ably smoke test when `ABLY_API_KEY` is available.
+
+#### Operational notes
+
+- Trusted hosted path is Ably TLS, not `wss://192.168.x.x`.
+- App env needed on Vercel: `ABLY_API_KEY`; optional `NEXT_PUBLIC_MYOPACK_DEVICE_ID` defaults to `demo-01`.
+- Firmware must be flashed with a local `secrets.h` containing `MP_ABLY_ENABLED=1`, device ID, Ably key name/secret, and a trusted root CA for `main.mqtt.ably.net`.
+- `MP_ABLY_ALLOW_INSECURE_TLS` exists for emergency bench debugging only and should stay `0` for a trusted demo.
+
+#### Handoff / verification state
+
+- `npm.cmd install ably` succeeded and updated `package.json` / `package-lock.json`.
+- `node_modules\.bin\tsc.cmd --noEmit`: passed.
+- `npm.cmd run test:emg`: passed.
+- `npm.cmd run lint`: passed.
+- `npm.cmd run build`: blocked in the sandbox with `spawn EPERM`; the user asked to upload before rerunning.
+- `pio run`: not available in this shell PATH, so firmware compile still needs PlatformIO verification.
+- Before live demo, set Vercel `ABLY_API_KEY`, flash firmware with local `firmware/src/secrets.h`, and use the app Device Link -> Cloud Relay mode.

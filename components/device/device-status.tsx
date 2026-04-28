@@ -32,7 +32,7 @@ function stateStyle(state: string, source: string): {
       bg: 'rgba(31,216,164,0.10)',
       border: 'rgba(31,216,164,0.30)',
       color: 'var(--mp-jade)',
-      label: 'LIVE',
+      label: source === 'relay' ? 'RELAY' : 'LIVE',
       dot: true,
     }
   }

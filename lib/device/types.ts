@@ -157,4 +157,4 @@ export type DeviceConnectionState =
   | 'connected'
   | 'error'
 
-export type DataSource = 'simulated' | 'device'
+export type DataSource = 'simulated' | 'device' | 'relay'

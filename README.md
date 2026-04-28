@@ -28,14 +28,19 @@ pio device monitor     # 115200 baud
 wifi-set <ssid> <password>
 ```
 
-**Connect them:**
+**Connect them locally:**
 1. Serial monitor prints the device IP after it joins WiFi.
 2. In the app, tap the status pill (top right) → enter IP → Connect.
 3. Start a session on Monitor.
 
+**Connect through Vercel:**
+1. Set `ABLY_API_KEY` in Vercel and optionally `NEXT_PUBLIC_MYOPACK_DEVICE_ID`.
+2. Flash firmware with `firmware/src/secrets.h` based on `firmware/src/secrets.example.h`.
+3. In the app, choose Cloud Relay. The trusted path is Ably WSS/MQTT TLS, not a private ESP32 IP.
+
 ## Features
 
-- **Dual data source:** simulated (in-browser) or live device (WebSocket)
+- **Three data sources:** simulated, live LAN WebSocket, or Ably cloud relay
 - **4 EMG channels:** L/R quadriceps, L/R hamstrings
 - **Bilateral symmetry scoring:** the clinical differentiator — shows
   activation imbalance that standard PT misses
@@ -46,8 +51,10 @@ wifi-set <ssid> <password>
 
 ## Deploy
 
-The app is a stock Next.js 14 project — push to GitHub, import to Vercel,
-done. No env vars needed for Phase 1.
+The app is a stock Next.js 14 project. For simulation and local LAN demos no
+env vars are required. For Vercel-hosted live sync, set `ABLY_API_KEY` as a
+server-only variable and `NEXT_PUBLIC_MYOPACK_DEVICE_ID` if the device ID is
+not `demo-01`.
 
 ## Hardware reference
 

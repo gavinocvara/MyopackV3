@@ -5,6 +5,10 @@
 // ─────────────────────────────────────────────────────────────
 #pragma once
 
+#if __has_include("secrets.h")
+  #include "secrets.h"
+#endif
+
 // ───── WiFi credentials ──────────────────────────────────────
 // For the demo, hardcode here OR use runtime provisioning via
 // serial console (see wifi_manager.cpp — `wifi-set <ssid> <pw>`).
@@ -19,6 +23,36 @@
 // ───── WebSocket server ──────────────────────────────────────
 #define MP_WS_PORT            81
 #define MP_WS_STREAM_HZ       20      // app frame rate (50 ms period)
+
+// Cloud relay (Ably MQTT over TLS). Leave disabled unless credentials are
+// supplied from a local, untracked secrets.h or PlatformIO build flags.
+#ifndef MP_ABLY_ENABLED
+  #define MP_ABLY_ENABLED     0
+#endif
+#ifndef MP_ABLY_DEVICE_ID
+  #define MP_ABLY_DEVICE_ID   "demo-01"
+#endif
+#ifndef MP_ABLY_KEY_NAME
+  #define MP_ABLY_KEY_NAME    ""
+#endif
+#ifndef MP_ABLY_KEY_SECRET
+  #define MP_ABLY_KEY_SECRET  ""
+#endif
+#ifndef MP_ABLY_HOST
+  #define MP_ABLY_HOST        "main.mqtt.ably.net"
+#endif
+#ifndef MP_ABLY_PORT
+  #define MP_ABLY_PORT        8883
+#endif
+#ifndef MP_ABLY_KEEPALIVE_SEC
+  #define MP_ABLY_KEEPALIVE_SEC 30
+#endif
+#ifndef MP_ABLY_ALLOW_INSECURE_TLS
+  #define MP_ABLY_ALLOW_INSECURE_TLS 0
+#endif
+#ifndef MP_ABLY_ROOT_CA
+  #define MP_ABLY_ROOT_CA     ""
+#endif
 
 // ───── Physical side assignment ──────────────────────────────
 // U1 (CS=MP_PIN_CS_LEFT)  → LEFT  body side: ch[0]=primary, ch[1]=secondary

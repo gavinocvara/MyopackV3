@@ -26,7 +26,7 @@ export interface SessionRecord {
   symmetry: number | null
   leftActivation?: number
   rightActivation?: number
-  dataSource?: 'simulated' | 'device'
+  dataSource?: 'simulated' | 'device' | 'relay'
   inputHz?: number
   droppedFrames?: number
   parseErrors?: number
@@ -120,7 +120,7 @@ function isSessionRecord(value: unknown): value is SessionRecord {
     (isFiniteNumber(record.leftActivation) || typeof record.leftActivation === 'undefined') &&
     (isFiniteNumber(record.rightActivation) || typeof record.rightActivation === 'undefined') &&
     (isOptionalChannelRoute(record.channelRoute) || typeof record.channelRoute === 'undefined') &&
-    (record.dataSource === 'simulated' || record.dataSource === 'device' || typeof record.dataSource === 'undefined') &&
+    (record.dataSource === 'simulated' || record.dataSource === 'device' || record.dataSource === 'relay' || typeof record.dataSource === 'undefined') &&
     (isFiniteNumber(record.inputHz) || typeof record.inputHz === 'undefined') &&
     (isFiniteNumber(record.droppedFrames) || typeof record.droppedFrames === 'undefined') &&
     (isFiniteNumber(record.parseErrors) || typeof record.parseErrors === 'undefined') &&
