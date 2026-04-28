@@ -20,6 +20,8 @@ import {
 } from '@/lib/session-history'
 import { analyzeRecoveryLogs, type ImbalanceSeverity, type RecoveryRisk } from '@/lib/recovery-intelligence'
 
+type CalendarView = 'day' | 'month' | 'year'
+
 function scoreColor(score: number) {
   if (score >= 85) return 'var(--mp-jade)'
   if (score >= 70) return 'var(--mp-amber)'
@@ -57,6 +59,66 @@ function formatRecordDate(value: string) {
   return date.toLocaleDateString(undefined, { month: 'short', day: 'numeric' })
 }
 
+function formatRecordTime(value: string) {
+  const date = new Date(value)
+  if (Number.isNaN(date.getTime())) return '--:--:--'
+  return date.toLocaleTimeString(undefined, {
+    hour: 'numeric',
+    minute: '2-digit',
+    second: '2-digit',
+  })
+}
+
+function formatRecordDateTime(value: string) {
+  const date = new Date(value)
+  if (Number.isNaN(date.getTime())) return 'Saved run'
+  return date.toLocaleString(undefined, {
+    month: 'short',
+    day: 'numeric',
+    year: 'numeric',
+    hour: 'numeric',
+    minute: '2-digit',
+    second: '2-digit',
+  })
+}
+
+function calendarKey(date: Date, view: CalendarView) {
+  const year = date.getFullYear()
+  const month = `${date.getMonth() + 1}`.padStart(2, '0')
+  const day = `${date.getDate()}`.padStart(2, '0')
+  if (view === 'year') return `${year}`
+  if (view === 'month') return `${year}-${month}`
+  return `${year}-${month}-${day}`
+}
+
+function calendarLabel(date: Date, view: CalendarView) {
+  if (view === 'year') return date.toLocaleDateString(undefined, { year: 'numeric' })
+  if (view === 'month') return date.toLocaleDateString(undefined, { month: 'long', year: 'numeric' })
+  return date.toLocaleDateString(undefined, { weekday: 'short', month: 'short', day: 'numeric' })
+}
+
+function groupRecordsByCalendar(records: SessionRecord[], view: CalendarView) {
+  const groups = new Map<string, { label: string; records: SessionRecord[] }>()
+  records.forEach((record) => {
+    const date = new Date(record.timestamp)
+    if (Number.isNaN(date.getTime())) return
+    const key = calendarKey(date, view)
+    const existing = groups.get(key) ?? { label: calendarLabel(date, view), records: [] }
+    existing.records.push(record)
+    groups.set(key, existing)
+  })
+
+  return Array.from(groups.entries())
+    .sort(([a], [b]) => b.localeCompare(a))
+    .map(([key, group]) => ({
+      key,
+      label: group.label,
+      records: group.records
+        .slice()
+        .sort((a, b) => new Date(b.timestamp).getTime() - new Date(a.timestamp).getTime()),
+    }))
+}
+
 function severityColor(severity: ImbalanceSeverity, risk: RecoveryRisk) {
   if (severity === 'insufficient' || risk === 'unknown') return 'var(--mp-t4)'
   if (risk === 'elevated' || severity === 'high') return 'var(--mp-rose)'
@@ -75,14 +137,20 @@ export default function HealthPage() {
   const { emgData } = useEMG()
   const { selectedGroup, sideMode, channelRoute } = useMuscleSelection()
   const [records, setRecords] = useState<SessionRecord[]>([])
+  const [calendarView, setCalendarView] = useState<CalendarView>('day')
   const region = getMuscleRegion(selectedGroup ?? 'quads')
   const values = getRouteValues(emgData, channelRoute)
   const activation = getSideActivation(values, sideMode)
   const phase = getActivationPhase(activation)
   const progressScore = sideMode === 'bilateral' ? values.symmetry : activation
   const regionRecords = useMemo(
-    () => recordsForGroup(records, region.id).slice(-8),
+    () => recordsForGroup(records, region.id),
     [records, region.id]
+  )
+  const latestSevenRuns = useMemo(() => regionRecords.slice(-7), [regionRecords])
+  const calendarGroups = useMemo(
+    () => groupRecordsByCalendar(regionRecords, calendarView),
+    [calendarView, regionRecords]
   )
   const avgRegionScore = averageScore(regionRecords)
   const regionDelta = trendDelta(regionRecords)
@@ -104,8 +172,8 @@ export default function HealthPage() {
     }
   }, [])
 
-  const week = regionRecords.length > 0
-    ? regionRecords.slice(-7).map((record) => ({
+  const week = latestSevenRuns.length > 0
+    ? latestSevenRuns.map((record) => ({
         day: formatRecordDate(record.timestamp),
         score: Math.round(record.symmetry ?? record.activation),
       }))
@@ -171,11 +239,16 @@ export default function HealthPage() {
       </section>
 
       <section className="rounded-2xl p-4" style={{ background: 'var(--mp-s1)', border: '1px solid var(--mp-line2)' }}>
-        <div className="mb-4 flex items-center gap-2">
-          <TrendingUp size={16} style={{ color: 'var(--mp-t4)' }} />
-          <p className="text-[10px] font-bold uppercase tracking-[0.16em]" style={{ color: 'var(--mp-t4)' }}>
-          Saved run trend
-          </p>
+        <div className="mb-4 flex items-center justify-between gap-3">
+          <div className="flex items-center gap-2">
+            <TrendingUp size={16} style={{ color: 'var(--mp-t4)' }} />
+            <p className="text-[10px] font-bold uppercase tracking-[0.16em]" style={{ color: 'var(--mp-t4)' }}>
+              Saved run trend
+            </p>
+          </div>
+          <span className="font-mono text-[10px] font-black uppercase tracking-[0.12em]" style={{ color: 'var(--mp-t4)' }}>
+            last 7
+          </span>
         </div>
         <div className="flex items-end justify-between gap-2">
           {week.map((item, index) => (
@@ -333,7 +406,7 @@ export default function HealthPage() {
               {regionRecords.length} runs
             </p>
             <p className="mt-2 text-[11px] leading-5" style={{ color: 'var(--mp-t3)' }}>
-              More repeated sessions make the local advice more specific to your pattern.
+              Uses every saved {region.shortLabel.toLowerCase()} run from the last 14 days, up to 150 attempts.
             </p>
           </div>
         </div>
@@ -434,29 +507,81 @@ export default function HealthPage() {
         </p>
         <div className="flex flex-col gap-5">
           <ProgressLine label={`${region.shortLabel} control`} value={Math.round(avgRegionScore ?? progressScore)} target={95} color={scoreColor(avgRegionScore ?? progressScore)} />
-          <ProgressLine label="Saved run goal" value={Math.min(regionRecords.length, 12)} target={12} color="var(--mp-sky)" />
+          <ProgressLine label="Two-week memory" value={Math.min(regionRecords.length, 150)} target={150} color="var(--mp-sky)" />
           <ProgressLine label="Consistency" value={Math.min(regionRecords.length, 6)} target={6} color="var(--mp-jade)" />
         </div>
       </section>
 
       <section className="rounded-2xl p-4" style={{ background: 'rgba(255,255,255,0.035)', border: '1px solid var(--mp-line)' }}>
-        <p className="mb-3 text-[10px] font-bold uppercase tracking-[0.16em]" style={{ color: 'var(--mp-t4)' }}>
-          Recovery log
-        </p>
+        <div className="mb-4 flex items-start justify-between gap-3">
+          <div>
+            <p className="text-[10px] font-bold uppercase tracking-[0.16em]" style={{ color: 'var(--mp-t4)' }}>
+              Recovery calendar
+            </p>
+            <p className="mt-2 text-[11px] leading-5" style={{ color: 'var(--mp-t3)' }}>
+              Saved runs are grouped by the moment each attempt began.
+            </p>
+          </div>
+          <div className="grid grid-cols-3 gap-1 rounded-xl p-1" style={{ background: 'rgba(255,255,255,0.045)', border: '1px solid var(--mp-line)' }}>
+            {(['day', 'month', 'year'] as const).map((view) => {
+              const active = calendarView === view
+              return (
+                <button
+                  key={view}
+                  onClick={() => setCalendarView(view)}
+                  className="h-8 rounded-lg px-2 text-[10px] font-black uppercase tracking-[0.1em]"
+                  style={{
+                    background: active ? 'rgba(36,214,162,0.14)' : 'transparent',
+                    color: active ? 'var(--mp-jade)' : 'var(--mp-t4)',
+                  }}
+                >
+                  {view}
+                </button>
+              )
+            })}
+          </div>
+        </div>
         {regionRecords.length === 0 ? (
           <p className="text-xs leading-5" style={{ color: 'var(--mp-t3)' }}>
             No saved {region.label.toLowerCase()} runs yet. End a monitoring session on the Monitor page to create the first local record.
           </p>
         ) : (
-          <div className="flex flex-col gap-2">
-            {regionRecords.slice().reverse().map((record) => (
-              <div key={record.id} className="flex items-center justify-between rounded-xl px-3 py-2" style={{ background: 'rgba(255,255,255,0.035)' }}>
-                <span className="text-xs font-semibold" style={{ color: 'var(--mp-t2)' }}>
-                  {formatRecordDate(record.timestamp)} · {record.sideMode}
-                </span>
-                <span className="font-mono text-xs font-bold" style={{ color: scoreColor(record.symmetry ?? record.activation) }}>
-                  {Math.round(record.symmetry ?? record.activation)}%
-                </span>
+          <div className="flex flex-col gap-3">
+            {calendarGroups.map((group) => (
+              <div key={group.key} className="rounded-2xl p-3" style={{ background: 'rgba(255,255,255,0.035)', border: '1px solid var(--mp-line)' }}>
+                <div className="mb-3 flex items-center justify-between gap-3">
+                  <p className="text-sm font-black" style={{ color: 'var(--mp-t1)' }}>
+                    {group.label}
+                  </p>
+                  <span className="font-mono text-[10px] font-black uppercase tracking-[0.12em]" style={{ color: 'var(--mp-t4)' }}>
+                    {group.records.length} run{group.records.length === 1 ? '' : 's'}
+                  </span>
+                </div>
+                <div className="grid gap-2">
+                  {group.records.map((record) => {
+                    const score = record.symmetry ?? record.activation
+                    return (
+                      <div key={record.id} className="rounded-xl px-3 py-2" style={{ background: 'rgba(0,0,0,0.14)' }}>
+                        <div className="flex items-center justify-between gap-3">
+                          <span className="font-mono text-[11px] font-bold" style={{ color: 'var(--mp-t2)' }}>
+                            {calendarView === 'day' ? formatRecordTime(record.timestamp) : formatRecordDateTime(record.timestamp)}
+                          </span>
+                          <span className="font-mono text-xs font-bold" style={{ color: scoreColor(score) }}>
+                            {Math.round(score)}%
+                          </span>
+                        </div>
+                        <div className="mt-1 flex items-center justify-between gap-3">
+                          <span className="text-[10px] font-bold uppercase tracking-[0.12em]" style={{ color: 'var(--mp-t4)' }}>
+                            {record.sideMode}
+                          </span>
+                          <span className="text-[10px] font-semibold" style={{ color: 'var(--mp-t3)' }}>
+                            started {formatRecordDateTime(record.timestamp)}
+                          </span>
+                        </div>
+                      </div>
+                    )
+                  })}
+                </div>
               </div>
             ))}
           </div>

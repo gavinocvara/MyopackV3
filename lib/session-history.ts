@@ -11,7 +11,12 @@ import {
 
 export interface SessionRecord {
   id: string
+  /**
+   * Certified session start time. Older records used this field as save time;
+   * new records write the moment the run began so recovery history is honest.
+   */
   timestamp: string
+  endedAt?: string
   muscleGroup: MuscleGroup
   sideMode: SideMode
   sensorPair: SensorPair
@@ -29,7 +34,9 @@ export interface SessionRecord {
 }
 
 const STORAGE_KEY = 'myopack:session_history'
-const MAX_RECORDS = 200
+const MAX_RECORDS = 150
+const RETENTION_DAYS = 14
+const RETENTION_MS = RETENTION_DAYS * 24 * 60 * 60 * 1000
 
 export function loadSessionRecords(): SessionRecord[] {
   if (typeof window === 'undefined') return []
@@ -38,19 +45,28 @@ export function loadSessionRecords(): SessionRecord[] {
     if (!raw) return []
     const parsed = JSON.parse(raw)
     if (!Array.isArray(parsed)) return []
-    return parsed.filter(isSessionRecord).slice(-MAX_RECORDS)
+    const records = pruneSessionRecords(parsed.filter(isSessionRecord))
+    if (records.length !== parsed.length) {
+      window.localStorage.setItem(STORAGE_KEY, JSON.stringify(records))
+    }
+    return records
   } catch {
     return []
   }
 }
 
-export function saveSessionRecord(record: Omit<SessionRecord, 'id' | 'timestamp'>): SessionRecord {
+export function saveSessionRecord(
+  record: Omit<SessionRecord, 'id' | 'timestamp' | 'endedAt'> & { startedAt?: string }
+): SessionRecord {
+  const endedAt = new Date().toISOString()
+  const { startedAt, ...session } = record
   const next: SessionRecord = {
-    ...record,
+    ...session,
     id: `session-${Date.now()}-${Math.round(Math.random() * 10000)}`,
-    timestamp: new Date().toISOString(),
+    timestamp: startedAt ?? endedAt,
+    endedAt,
   }
-  const records = [...loadSessionRecords(), next].slice(-MAX_RECORDS)
+  const records = pruneSessionRecords([...loadSessionRecords(), next])
   if (typeof window !== 'undefined') {
     try {
       window.localStorage.setItem(STORAGE_KEY, JSON.stringify(records))
@@ -81,12 +97,23 @@ export function trendDelta(records: SessionRecord[]): number | null {
   return last - first
 }
 
+export function pruneSessionRecords(records: SessionRecord[], now = Date.now()): SessionRecord[] {
+  const cutoff = now - RETENTION_MS
+  return records
+    .filter((record) => {
+      const started = new Date(record.timestamp).getTime()
+      return Number.isFinite(started) && started >= cutoff
+    })
+    .slice(-MAX_RECORDS)
+}
+
 function isSessionRecord(value: unknown): value is SessionRecord {
   if (!value || typeof value !== 'object') return false
   const record = value as Partial<SessionRecord>
   return (
     typeof record.id === 'string' &&
     typeof record.timestamp === 'string' &&
+    (typeof record.endedAt === 'string' || typeof record.endedAt === 'undefined') &&
     isFiniteNumber(record.durationSeconds) &&
     isFiniteNumber(record.activation) &&
     (isFiniteNumber(record.symmetry) || record.symmetry === null) &&

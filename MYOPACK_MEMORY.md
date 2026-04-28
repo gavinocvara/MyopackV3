@@ -1,6 +1,6 @@
 # MyoPack Memory / Handoff
 
-Last updated: 2026-04-27
+Last updated: 2026-04-27 20:50:18 -05:00
 
 ## Current architecture
 
@@ -125,9 +125,9 @@ Last updated: 2026-04-27
 
 ## Unresolved issues
 
-- `npm audit` reports existing dependency vulnerabilities after installing 3D packages. No audit fix was run because it may introduce breaking upgrades.
-- Production build still fails locally on a Next dependency/webpack readlink issue: `EISDIR: illegal operation on a directory, readlink 'D:\myopack-v3\node_modules\next\dist\pages\_app.js'`. The file exists as a normal file, so this appears to be a local Windows/Next install or worker issue rather than a TypeScript error. `node_modules\.bin\tsc.cmd --noEmit` passes.
-- No browser visual QA has been performed yet in this run.
+- `npm audit` still cannot complete in this environment because the registry audit endpoint returns an error. The dependency install summary dropped from 11 vulnerabilities to 8 after the Next patch upgrade.
+- Production build now passes locally on Next.js 14.2.35 when `next build` is allowed to spawn worker processes.
+- Mobile browser smoke QA was performed on 2026-04-27 with a 390px-wide headless Chrome viewport. `/today` loaded, the device/sim modal stayed inside the viewport, and `/health` exposed the Recovery calendar controls.
 - Procedural human model is intentionally code-native; future polish could replace or augment it with a medically accurate optimized asset.
 - The Health Recovery Coach is local and rule-based. The disclaimer says guidance is generated from saved session summaries in-browser and is not diagnostic.
 - Previous hardware-looking issue was likely shared-SPI chip-select contention: `ADS1292 CS=21` returned `0x11` while `CS=22` returned `0x53` before both CS pins were forced high before probing. After the fix and flash, reboot log showed both `CS=21` and `CS=22` returning `0x53`.
@@ -151,6 +151,48 @@ Last updated: 2026-04-27
 ---
 
 ## Contribution log
+
+### Session: Dependency patch, mobile modal, and recovery calendar history
+**Date/time:** 2026-04-27 20:50:18 -05:00  
+**Model:** GPT-5 Codex  
+**Author type:** Codex acting as Build and Release Reliability Engineer + Browser QA and Touch Auditor + Session History Auditor + Recovery Intelligence Governor
+
+#### Scope
+
+This session addressed user-reported deployed-app issues and dependency risk:
+
+- Upgrade the vulnerable Next.js dependency found during repository inspection.
+- Fix the phone viewport issue where tapping the SIM/device status opened a square/modal partly outside the phone view.
+- Stop the Monitor activation-status copy from changing layout height as it switches between "Needs attention" and "Balanced activation."
+- Save a certified session-start timestamp down to the second for each completed run.
+- Remove the Recovery coach memory cap at 8 runs.
+- Keep all saved runs from the last 14 days, up to 150 attempts, then prune older/excess attempts.
+- Replace the flat Recovery log with a calendar-style grouping that can switch between day, month, and year views.
+
+#### Files changed
+
+- `package.json` and `package-lock.json`: upgraded `next` and `eslint-config-next` from `14.2.5` to `14.2.35`.
+- `components/device/device-connect.tsx`: replaced the transform-centered modal positioning with a viewport-safe fixed flex wrapper. The modal now uses `maxHeight`, `overflowY: auto`, and safe-area padding so it remains fully visible on phone screens.
+- `app/today/page.tsx`: added a session-start ref that records the exact ISO timestamp when monitoring begins, passes that into saved session history, and reserves stable height for the activation status line to prevent vertical jitter.
+- `lib/session-history.ts`: changed `timestamp` semantics to certified session start time for new records, added optional `endedAt`, prunes to the last 14 days, and caps retained records at 150.
+- `app/health/page.tsx`: uses all retained records for the selected muscle group instead of `.slice(-8)`, keeps the Saved Run Trend limited to the latest 7 runs, updates Coach Memory to explain the 14-day/150-run window, and replaces the old flat Recovery log with a Recovery Calendar grouped by day/month/year.
+
+#### Verification
+
+- `npm.cmd run test:emg`: passed.
+- `npm.cmd run lint`: passed with no warnings or errors.
+- `npm.cmd run build`: passed on Next.js 14.2.35 after allowing worker processes.
+- Mobile smoke check with headless Chrome at `390x844`:
+  - `/today` rendered meaningful content.
+  - Device connection/SIM modal bounding box was inside the viewport.
+  - `/health` rendered the Recovery Calendar and Day/Month/Year controls.
+
+#### Notes for next model
+
+- `npm audit --audit-level=moderate` still fails because the npm registry audit endpoint returns an error in this environment. The `npm install` summary now reports 8 vulnerabilities instead of the previous 11.
+- The browser plugin CLI `agent-browser` was not available on PATH, so verification used bundled Playwright libraries with the system Chrome executable.
+- The only browser console error seen during smoke QA was a 404 resource load, likely a missing favicon/static asset, not an app runtime failure.
+- New session records store the start time in `timestamp` and the stop/save time in `endedAt`. Older records without `endedAt` remain valid.
 
 ### Session: EMG channel routing overhaul
 **Date:** 2026-04-26  
