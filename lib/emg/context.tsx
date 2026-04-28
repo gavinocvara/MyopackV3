@@ -21,6 +21,8 @@ import {
   DeviceClient,
   type DeviceTelemetryDiagnostics,
 } from '@/lib/device/websocket'
+import { AblyRelayClient } from '@/lib/device/ably-relay'
+import { DEFAULT_RELAY_DEVICE_ID } from '@/lib/device/relay-config'
 import {
   appendHistoryPoint,
   emgDataFromChannels,
@@ -55,6 +57,7 @@ interface EMGContextValue {
   deviceFirmwareVersion: string | null
   deviceDiagnostics: DeviceTelemetryDiagnostics
   connectDevice: (target: string) => void
+  connectRelay: (deviceId?: string) => void
   disconnectDevice: () => void
   syncDeviceLabels: (labels: [string, string, string, string]) => void
 }
@@ -92,6 +95,7 @@ export function EMGProvider({ children }: { children: ReactNode }) {
   const simTimerRef = useRef<ReturnType<typeof setInterval> | null>(null)
   const precheckTimerRef = useRef<ReturnType<typeof setInterval> | null>(null)
   const deviceClientRef = useRef<DeviceClient | null>(null)
+  const relayClientRef = useRef<AblyRelayClient | null>(null)
   const isMonitoringRef = useRef(false)
   const isPrecheckingRef = useRef(false)
 
@@ -111,6 +115,9 @@ export function EMGProvider({ children }: { children: ReactNode }) {
       if (savedAddr) setDeviceAddress(savedAddr)
       if (savedSource === 'device' && savedAddr) {
         setDataSourceState('device')
+      } else if (savedSource === 'relay') {
+        setDeviceAddress(savedAddr || process.env.NEXT_PUBLIC_MYOPACK_DEVICE_ID || DEFAULT_RELAY_DEVICE_ID)
+        setDataSourceState('relay')
       }
     } catch {
       // ignore storage failures
@@ -164,43 +171,47 @@ export function EMGProvider({ children }: { children: ReactNode }) {
     setPrecheckSamples((prev) => appendHistoryPoint(prev, values, timestamp, MAX_PRECHECK_POINTS))
   }, [])
 
+  const handleHello = useCallback((hello: HelloFrame) => {
+    setDeviceFirmwareVersion(hello.version)
+    if (hello.labels && hello.labels.length >= 4) {
+      setChannelLabels([
+        hello.labels[0],
+        hello.labels[1],
+        hello.labels[2],
+        hello.labels[3],
+      ])
+    }
+  }, [])
+
+  const handleTelemetry = useCallback((frame: NormalizedTelemetryFrame) => {
+    const values = frame.channels
+
+    if (frame.labels) {
+      setChannelLabels(frame.labels)
+    }
+
+    const timestamp = frame.timestamp
+
+    if (isPrecheckingRef.current) {
+      pushPrecheckSample(values, timestamp)
+    }
+
+    if (!isMonitoringRef.current) return
+
+    setEmgData(emgDataFromChannels(values, timestamp))
+    pushHistory(values, timestamp)
+  }, [pushHistory, pushPrecheckSample])
+
   const ensureClient = useCallback((): DeviceClient => {
     if (deviceClientRef.current) return deviceClientRef.current
 
     const client = new DeviceClient({
       onState: (state) => setDeviceState(state),
-      onHello: (hello: HelloFrame) => {
-        setDeviceFirmwareVersion(hello.version)
-        if (hello.labels && hello.labels.length >= 4) {
-          setChannelLabels([
-            hello.labels[0],
-            hello.labels[1],
-            hello.labels[2],
-            hello.labels[3],
-          ])
-        }
-      },
+      onHello: handleHello,
       onDiagnostics: (diagnostics) => {
         setDeviceDiagnostics(diagnostics)
       },
-      onTelemetry: (frame: NormalizedTelemetryFrame) => {
-        const values = frame.channels
-
-        if (frame.labels) {
-          setChannelLabels(frame.labels)
-        }
-
-        const timestamp = frame.timestamp
-
-        if (isPrecheckingRef.current) {
-          pushPrecheckSample(values, timestamp)
-        }
-
-        if (!isMonitoringRef.current) return
-
-        setEmgData(emgDataFromChannels(values, timestamp))
-        pushHistory(values, timestamp)
-      },
+      onTelemetry: handleTelemetry,
       onError: (msg) => {
         console.warn('[device]', msg)
       },
@@ -208,29 +219,62 @@ export function EMGProvider({ children }: { children: ReactNode }) {
 
     deviceClientRef.current = client
     return client
-  }, [pushHistory, pushPrecheckSample])
+  }, [handleHello, handleTelemetry])
+
+  const ensureRelayClient = useCallback((): AblyRelayClient => {
+    if (relayClientRef.current) return relayClientRef.current
+
+    const client = new AblyRelayClient({
+      onState: (state) => setDeviceState(state),
+      onHello: handleHello,
+      onDiagnostics: (diagnostics) => {
+        setDeviceDiagnostics(diagnostics)
+      },
+      onTelemetry: handleTelemetry,
+      onError: (msg) => {
+        console.warn('[relay]', msg)
+      },
+    })
+
+    relayClientRef.current = client
+    return client
+  }, [handleHello, handleTelemetry])
 
   const connectDevice = useCallback((target: string) => {
     setDeviceAddress(target)
     setDataSourceState('device')
     stopSimTimers()
+    relayClientRef.current?.disconnect()
     setDeviceDiagnostics(DEFAULT_DEVICE_DIAGNOSTICS)
     const client = ensureClient()
     client.connect(target)
   }, [ensureClient, stopSimTimers])
 
+  const connectRelay = useCallback((deviceId?: string) => {
+    const relayDeviceId = deviceId || process.env.NEXT_PUBLIC_MYOPACK_DEVICE_ID || DEFAULT_RELAY_DEVICE_ID
+    setDeviceAddress(relayDeviceId)
+    setDeviceFirmwareVersion(null)
+    setDataSourceState('relay')
+    stopSimTimers()
+    deviceClientRef.current?.disconnect()
+    setDeviceDiagnostics(DEFAULT_DEVICE_DIAGNOSTICS)
+    const client = ensureRelayClient()
+    client.connect(relayDeviceId)
+  }, [ensureRelayClient, stopSimTimers])
+
   const disconnectDevice = useCallback(() => {
     deviceClientRef.current?.disconnect()
+    relayClientRef.current?.disconnect()
   }, [])
 
   const syncDeviceLabels = useCallback((labels: [string, string, string, string]) => {
     setChannelLabels(labels)
-    const client = deviceClientRef.current
+    const client = dataSource === 'relay' ? relayClientRef.current : deviceClientRef.current
     if (!client?.isConnected()) return
     labels.forEach((label, index) => {
       client.setLabel(index as 0 | 1 | 2 | 3, label)
     })
-  }, [])
+  }, [dataSource])
 
   useEffect(() => {
     if (dataSource !== 'device' || !deviceAddress) return
@@ -239,9 +283,17 @@ export function EMGProvider({ children }: { children: ReactNode }) {
   }, [dataSource, deviceAddress, ensureClient])
 
   useEffect(() => {
+    if (dataSource !== 'relay') return
+    const client = ensureRelayClient()
+    if (!client.isConnected()) client.connect(deviceAddress || process.env.NEXT_PUBLIC_MYOPACK_DEVICE_ID || DEFAULT_RELAY_DEVICE_ID)
+  }, [dataSource, deviceAddress, ensureRelayClient])
+
+  useEffect(() => {
     return () => {
       deviceClientRef.current?.disconnect()
       deviceClientRef.current = null
+      relayClientRef.current?.disconnect()
+      relayClientRef.current = null
     }
   }, [])
 
@@ -325,7 +377,14 @@ export function EMGProvider({ children }: { children: ReactNode }) {
     if (source === 'device') {
       stopSimTimers()
       stopPrecheckTimer()
+      relayClientRef.current?.disconnect()
+    } else if (source === 'relay') {
+      stopSimTimers()
+      stopPrecheckTimer()
+      deviceClientRef.current?.disconnect()
     } else if (isMonitoringRef.current) {
+      deviceClientRef.current?.disconnect()
+      relayClientRef.current?.disconnect()
       startSimulation()
     }
   }, [startSimulation, stopPrecheckTimer, stopSimTimers])
@@ -358,6 +417,7 @@ export function EMGProvider({ children }: { children: ReactNode }) {
     deviceFirmwareVersion,
     deviceDiagnostics,
     connectDevice,
+    connectRelay,
     disconnectDevice,
     syncDeviceLabels,
   }

@@ -87,7 +87,7 @@ export default function VitalsPage() {
           : 'High imbalance drift'
   const captureState = isMonitoring ? 'Tracking' : sessionTime > 0 ? 'Frozen' : 'Ready'
   const graphRate = estimateHistoryRateHz(history)
-  const inputRate = dataSource === 'device'
+  const inputRate = dataSource === 'device' || dataSource === 'relay'
     ? deviceDiagnostics.inputHz
     : graphRate || (isMonitoring ? 20 : 0)
   const rateLabel = inputRate > 0 ? `${Math.round(inputRate)} Hz` : 'Hold'
@@ -260,7 +260,7 @@ export default function VitalsPage() {
         <MetricTile label="Session" value={sessionTime > 0 ? formatTime(sessionTime) : '--:--'} color={isMonitoring ? 'var(--mp-sky)' : 'var(--mp-t4)'} />
         <MetricTile label="Symmetry" value={sideMode === 'bilateral' ? `${Math.round(values.symmetry)}%` : 'Single'} color={sideMode === 'bilateral' ? phase.color : 'var(--mp-t3)'} />
         <MetricTile label="Cadence" value={isMonitoring ? rateLabel.replace(' ', '') : 'Hold'} color="var(--mp-coral)" />
-        <MetricTile label="Source" value={dataSource === 'device' ? 'WS' : 'SIM'} color={dataSource === 'device' ? 'var(--mp-jade)' : 'var(--mp-sky)'} />
+        <MetricTile label="Source" value={dataSource === 'relay' ? 'RELAY' : dataSource === 'device' ? 'WS' : 'SIM'} color={dataSource === 'simulated' ? 'var(--mp-sky)' : 'var(--mp-jade)'} />
       </section>
 
       <section
@@ -276,8 +276,8 @@ export default function VitalsPage() {
               Signal path check
             </h3>
           </div>
-          <span className="rounded-full px-3 py-2 font-mono text-[10px] font-black" style={{ color: dataSource === 'device' ? 'var(--mp-jade)' : 'var(--mp-sky)', background: 'rgba(255,255,255,0.045)', border: '1px solid var(--mp-line)' }}>
-            {dataSource === 'device' ? 'device' : 'sim'}
+          <span className="rounded-full px-3 py-2 font-mono text-[10px] font-black" style={{ color: dataSource === 'simulated' ? 'var(--mp-sky)' : 'var(--mp-jade)', background: 'rgba(255,255,255,0.045)', border: '1px solid var(--mp-line)' }}>
+            {dataSource === 'relay' ? 'relay' : dataSource === 'device' ? 'device' : 'sim'}
           </span>
         </div>
         <div className="grid grid-cols-2 gap-3">

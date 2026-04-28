@@ -36,6 +36,7 @@
 #include "signal_processing.h"
 #include "wifi_manager.h"
 #include "telemetry_server.h"
+#include "cloud_relay.h"
 
 // ── Globals ─────────────────────────────────────────────────
 static SPIClass  vspi(VSPI);
@@ -106,6 +107,7 @@ static void applyPreset(const char* preset, bool save) {
     strncpy(chLabels[ch], selected.labels[ch], MP_LABEL_MAX_LEN - 1);
     chLabels[ch][MP_LABEL_MAX_LEN - 1] = '\0';
     MpTelemetry::setLabel(ch, chLabels[ch]);
+    MpCloudRelay::setLabel(ch, chLabels[ch]);
     if (save) saveLabel(ch, chLabels[ch]);
   }
 
@@ -128,14 +130,17 @@ static void applyLabel(uint8_t ch, const char* name) {
   strncpy(chLabels[ch], name, MP_LABEL_MAX_LEN - 1);
   chLabels[ch][MP_LABEL_MAX_LEN - 1] = '\0';
   MpTelemetry::setLabel(ch, chLabels[ch]);
+  MpCloudRelay::setLabel(ch, chLabels[ch]);
   saveLabel(ch, chLabels[ch]);
   Serial.printf("[label] ch%u → \"%s\"  (saved to NVS)\n", ch, chLabels[ch]);
 }
 
-static void handleTelemetryLabelChange(uint8_t ch, const char* name) {
+static void handleRemoteLabelChange(uint8_t ch, const char* name) {
   if (ch >= 4 || !name) return;
   strncpy(chLabels[ch], name, MP_LABEL_MAX_LEN - 1);
   chLabels[ch][MP_LABEL_MAX_LEN - 1] = '\0';
+  MpTelemetry::setLabel(ch, chLabels[ch]);
+  MpCloudRelay::setLabel(ch, chLabels[ch]);
   Serial.printf("[label] ch%u synced from app → \"%s\"\n", ch, chLabels[ch]);
 }
 
@@ -220,8 +225,9 @@ static void handleSerial() {
         }
 
       } else if (line == "stats") {
-        Serial.printf("[stats] leftSamples=%lu  rightSamples=%lu  clients=%u\n",
-                      leftSampleCount, rightSampleCount, MpTelemetry::clientCount());
+        Serial.printf("[stats] leftSamples=%lu  rightSamples=%lu  wsClients=%u  cloud=%s\n",
+                      leftSampleCount, rightSampleCount, MpTelemetry::clientCount(),
+                      MpCloudRelay::isConnected() ? "connected" : "offline");
         Serial.printf("        ch0 (%s)=%.1f%%  ch1 (%s)=%.1f%%\n",
                       chLabels[0], pct_L1, chLabels[1], pct_L2);
         Serial.printf("        ch2 (%s)=%.1f%%  ch3 (%s)=%.1f%%\n",
@@ -286,8 +292,12 @@ void setup() {
 
   // ── Channel labels (NVS → telemetry) ─────────────────────
   loadLabelsFromNvs();
-  for (int i = 0; i < 4; ++i) MpTelemetry::setLabel(i, chLabels[i]);
-  MpTelemetry::setLabelChangeHandler(handleTelemetryLabelChange);
+  for (int i = 0; i < 4; ++i) {
+    MpTelemetry::setLabel(i, chLabels[i]);
+    MpCloudRelay::setLabel(i, chLabels[i]);
+  }
+  MpTelemetry::setLabelChangeHandler(handleRemoteLabelChange);
+  MpCloudRelay::setLabelChangeHandler(handleRemoteLabelChange);
   Serial.printf("[labels] ch0=%s  ch1=%s  ch2=%s  ch3=%s\n",
                 chLabels[0], chLabels[1], chLabels[2], chLabels[3]);
 
@@ -298,6 +308,7 @@ void setup() {
 
   // ── WebSocket server ─────────────────────────────────────
   MpTelemetry::begin();
+  MpCloudRelay::begin();
 
   Serial.println();
   Serial.println("READY");
@@ -316,6 +327,7 @@ void setup() {
 void loop() {
   handleSerial();
   MpTelemetry::loop();
+  MpCloudRelay::loop();
 
   // ── Acquisition ──────────────────────────────────────────
   if (sim_force) {
@@ -362,6 +374,7 @@ void loop() {
   }
 
   MpTelemetry::update(pct_L1, pct_L2, pct_R1, pct_R2, /*monitoring=*/true);
+  MpCloudRelay::update(pct_L1, pct_L2, pct_R1, pct_R2, /*monitoring=*/true);
 
   // Heartbeat log every 5 s
   uint32_t now = millis();
@@ -373,8 +386,9 @@ void loop() {
     leftSampleCount = 0;
     rightSampleCount = 0;
     if (MpWiFi::isConnected()) {
-      Serial.printf("[hb] L=%.0f Hz R=%.0f Hz clients=%u %s=%.0f %s=%.0f %s=%.0f %s=%.0f\n",
+      Serial.printf("[hb] L=%.0f Hz R=%.0f Hz ws=%u cloud=%s %s=%.0f %s=%.0f %s=%.0f %s=%.0f\n",
                     leftHz, rightHz, MpTelemetry::clientCount(),
+                    MpCloudRelay::isConnected() ? "up" : "down",
                     chLabels[0], pct_L1, chLabels[1], pct_L2,
                     chLabels[2], pct_R1, chLabels[3], pct_R2);
     }

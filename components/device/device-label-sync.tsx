@@ -23,7 +23,7 @@ export function DeviceLabelSync() {
 
   useEffect(() => {
     if (!selectedGroup) return
-    if (dataSource !== 'device' || deviceState !== 'connected') return
+    if ((dataSource !== 'device' && dataSource !== 'relay') || deviceState !== 'connected') return
     syncDeviceLabels(DEVICE_LABELS[selectedGroup])
   }, [dataSource, deviceState, selectedGroup, syncDeviceLabels])
 

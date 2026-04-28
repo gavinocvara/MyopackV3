@@ -2,7 +2,8 @@
 
 Production firmware for the dual-ADS1292 EMG pipeline on the MyoPack PCB.
 Streams 4-channel muscle activation to the Next.js companion app over
-WebSocket at 20 Hz.
+WebSocket at 20 Hz. For Vercel-hosted phone demos, it can also publish the
+same normalized telemetry through Ably MQTT over TLS.
 
 ## Flash
 
@@ -15,6 +16,20 @@ pio device monitor
 ```
 
 Or from the PlatformIO sidebar: **Upload** → **Monitor** on the `esp32dev` env.
+
+## Cloud relay for Vercel
+
+Direct `ws://` links work only for local HTTP demos. A Vercel deployment is
+HTTPS, so phones need the cloud relay path:
+
+1. Create an Ably app and a device-scoped key.
+2. Copy `src/secrets.example.h` to `src/secrets.h`.
+3. Set `MP_ABLY_ENABLED`, `MP_ABLY_DEVICE_ID`, `MP_ABLY_KEY_NAME`,
+   `MP_ABLY_KEY_SECRET`, and `MP_ABLY_ROOT_CA`.
+4. Flash the ESP32, then connect the web app through Cloud Relay.
+
+The firmware publishes to `myopack:<device-id>:telemetry` and subscribes to
+`myopack:<device-id>:control` using `main.mqtt.ably.net:8883`.
 
 ## First-boot provisioning
 

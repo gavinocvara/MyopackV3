@@ -207,7 +207,7 @@ export default function TodayPage() {
   const recommendedRoute = recommendChannelRoute(precheckSamples, channelRoute, sideMode)
   const canStartSession = readiness.state === 'ready' || readiness.state === 'caution'
   const graphRate = estimateHistoryRateHz(history)
-  const rateLabel = dataSource === 'device'
+  const rateLabel = dataSource === 'device' || dataSource === 'relay'
     ? `${Math.round(deviceDiagnostics.inputHz || deviceDiagnostics.expectedStreamHz || 0)} Hz`
     : `${Math.round(graphRate || 20)} Hz`
 
@@ -249,9 +249,9 @@ export default function TodayPage() {
         leftActivation: sideMode === 'right' ? 0 : values.left,
         rightActivation: sideMode === 'left' ? 0 : values.right,
         dataSource,
-        inputHz: dataSource === 'device' ? deviceDiagnostics.inputHz : graphRate,
-        droppedFrames: dataSource === 'device' ? deviceDiagnostics.droppedFrames : 0,
-        parseErrors: dataSource === 'device' ? deviceDiagnostics.parseErrors : 0,
+        inputHz: dataSource === 'device' || dataSource === 'relay' ? deviceDiagnostics.inputHz : graphRate,
+        droppedFrames: dataSource === 'device' || dataSource === 'relay' ? deviceDiagnostics.droppedFrames : 0,
+        parseErrors: dataSource === 'device' || dataSource === 'relay' ? deviceDiagnostics.parseErrors : 0,
         precheckScore: readiness.score,
       })
       sessionStartedAtRef.current = null
