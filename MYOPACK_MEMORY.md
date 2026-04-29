@@ -589,3 +589,190 @@ Implemented the true hosted live-sync path requested by the user. The app no lon
 - `npm.cmd run build`: blocked in the sandbox with `spawn EPERM`; the user asked to upload before rerunning.
 - `pio run`: not available in this shell PATH, so firmware compile still needs PlatformIO verification.
 - Before live demo, set Vercel `ABLY_API_KEY`, flash firmware with local `firmware/src/secrets.h`, and use the app Device Link -> Cloud Relay mode.
+
+---
+
+### Session: Senior Design II hardware verification and live-test readiness
+**Date/time:** 2026-04-28  
+**Model:** GPT-5 Codex  
+**Author type:** Codex acting as Device Protocol Liaison + Signal Integrity Director + Hardware Verification Scribe
+
+#### Scope
+
+This session captured Senior Design II review findings after live board bring-up,
+Cloud Relay deployment, and electrode-placement diagnosis. No code changes were
+made during the review itself. The purpose was to lock confirmed hardware truth,
+separate transport/routing issues from electrode contact issues, and define the
+next live biceps test protocol.
+
+#### Hardware confirmed
+
+- The custom PCB is trusted. The schematic was reviewed and matches the firmware
+  pin definitions.
+- Both ADS1292 chips initialize successfully on every boot.
+- Previous ADS boot failures were caused by burned ADS1292 chips that have now
+  been replaced.
+- The current board is considered production-quality for the capstone demo path.
+- The ESP32 module is a standard ESP-WROOM-32 variant. Current firmware GPIO
+  assignments work on this module.
+- The CD74HC4067 multiplexer was correctly removed from the design. It was
+  unnecessary because the ADS1292 chips provide ADC over SPI, and removing the
+  MUX improved signal quality.
+- The chip-select wiring change from D5 to D22 is reflected in the schematic.
+  D22 is a clean GPIO with no boot-strapping behavior and is a good CS choice.
+- CN2, the right-side JST jack, is confirmed wired to U4.
+- U4 uses CS=22.
+- Therefore CN2 = U4 = CS=22 = right body side.
+- This matches firmware default `MP_PIN_CS_RIGHT = 22` and app default
+  `SWAP_PHYSICAL_SIDES = false`.
+
+#### Software confirmed
+
+- The current EMG channel routing model is correct and should not be changed:
+
+```text
+ch[0]/ch[1] = U1 = LEFT
+ch[2]/ch[3] = U4 = RIGHT
+pairA = { leftIndex: 0, rightIndex: 2 }
+pairB = { leftIndex: 1, rightIndex: 3 }
+```
+
+- All muscle groups default to `pairA`.
+- `SWAP_PHYSICAL_SIDES = false` remains correct based on the user's locked
+  hardware declaration that CN2/U4/CS=22 is the right side.
+- The Ably Cloud Relay path works.
+- ESP32 Ably connection was confirmed in serial logs.
+- The deployed Vercel app can obtain Ably token requests and subscribe through
+  Cloud Relay with device ID `demo-01`.
+- Firmware secrets are populated locally in ignored `firmware/src/secrets.h`.
+- Vercel env vars are set:
+  - `ABLY_API_KEY`
+  - `NEXT_PUBLIC_MYOPACK_DEVICE_ID=demo-01`
+- Routing and transport layers are ruled out as the cause of live signal quality
+  issues seen during testing.
+
+#### Live test diagnosis
+
+Observed symptoms:
+
+- One side responded to muscle contraction while the other side did not.
+- The responding side jumped and crashed erratically instead of producing a
+  smooth contraction ramp.
+- The earlier breadboard-era "small electrical sensation" was no longer present
+  on the PCB.
+
+Diagnosis:
+
+- This is not currently believed to be a code, routing, Cloud Relay, or ADS
+  initialization problem.
+- The spike-and-drop behavior is consistent with poor skin-electrode impedance
+  and motion artifact.
+- The one-sided response is most likely one electrode array having materially
+  worse contact than the other in that test, not a hardware-routing fault.
+- The prior breadboard sensation was attributed to a USB ground-loop/prototype
+  reference issue that the regulated PCB power design and RLD reference circuit
+  resolved.
+
+#### Electrode role mapping
+
+The PCB wiring fixes the color roles:
+
+```text
+Red wire    = TRS tip    = ADS1292 IN1P, positive differential input
+Green wire  = TRS ring   = ADS1292 IN1N, negative differential input
+Yellow wire = TRS sleeve = RLDIN/RLDREF, reference / right leg drive
+```
+
+Rules:
+
+- Red and green go on the active muscle.
+- Yellow goes on a quiet bony reference area.
+- Yellow must not be placed on the active muscle belly.
+
+#### Biceps placement protocol
+
+- Red electrode: biceps muscle belly peak, closer to the shoulder.
+- Green electrode: 2 cm below red along the muscle fiber direction, closer to
+  the elbow crease, still on the biceps muscle belly.
+- Yellow electrode: lateral elbow bone / olecranon-area reference.
+- Red-to-green spacing is measured center-to-center between the metal snap
+  connectors, not pad-edge to pad-edge.
+
+#### Electrode pad sizing decision
+
+- The user's pads are larger than standard EMG pads, about 4 cm ECG-style pads.
+- To achieve roughly 2 cm snap-to-snap spacing on biceps, trim only the inner
+  facing adhesive edges of the red and green pads.
+- Do not trim the yellow pad.
+- Do not cut the visible conductive gel disc.
+- Leave roughly 3 to 5 mm of adhesive border around the gel.
+- Trimmed red/green pads should become D-shaped: flat edges facing each other,
+  rounded edges facing outward.
+
+#### Next live test protocol
+
+1. Trim red and green pads on their facing edges while keeping gel discs intact.
+2. Skin prep with alcohol, let dry completely, then lightly abrade dead skin.
+3. Place red and green on the biceps belly along fiber direction with snaps
+   about 2 cm apart.
+4. Place yellow on the lateral elbow bone.
+5. Tape cable strain near the electrodes so cable movement does not tug on pad
+   contact.
+6. Boot the ESP32 and confirm both ADS1292 messages appear:
+
+```text
+ADS1292 CS=21 ID = 0x53
+ADS1292 CS=22 ID = 0x53
+```
+
+7. Open the deployed companion app.
+8. Connect through Cloud Relay using device ID `demo-01`.
+9. Watch baseline at rest for 10 seconds. Bars should sit low and stable.
+10. Slowly contract. Bars should ramp up smoothly instead of spiking.
+11. Verify left/right behavior using the locked declaration: CN2/U4/CS=22 is
+    the right body side.
+
+#### Acceptable uncertainty
+
+- The user stated that perfect left/right label direction is not critical for
+  the demo if the math and live monitoring work.
+- If labels appear inverted during testing, the fix remains a single app flag:
+  `SWAP_PHYSICAL_SIDES = true` in `lib/muscle-selection.ts`, with corresponding
+  firmware CS-side swap in `firmware/src/config.h` if the firmware labels should
+  also be changed.
+
+#### Do not change without explicit new evidence
+
+- Do not modify the channel routing model.
+- Do not modify the Ably relay path.
+- Do not modify schematic-derived pin assignments.
+- Do not reintroduce the old crossed candidate logic.
+- Do not treat spike-and-drop signal behavior as a transport problem unless
+  `/vitals` shows relay rate, parser, or frame-age failures.
+
+#### Next focus
+
+If smooth ramp behavior appears after improved placement:
+
+- Treat the hardware/software path as validated end to end.
+- Move to demo prep, presentation polish, and final UX refinements on `/today`,
+  `/vitals`, and `/health`.
+
+If spike-and-drop persists after improved placement:
+
+- Investigate the RLD/reference circuit on the suspect side.
+- Check JST jack solder joints.
+- Inspect the input filter capacitors and input path on the suspect ADS chip.
+
+If left/right labels appear inverted:
+
+- Flip `SWAP_PHYSICAL_SIDES` to `true` in `lib/muscle-selection.ts`.
+- Reflash firmware only if corresponding firmware-side label/pin naming needs
+  to match the physical demo language.
+
+#### Deferred
+
+- Final trimmed-pad electrode contact test has not yet been completed.
+- Production build issue noted in older memory entries remains unresolved for
+  the local Windows environment, but current Vercel deployment and local dev are
+  not blocked by it.
