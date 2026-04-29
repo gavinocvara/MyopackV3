@@ -120,10 +120,18 @@ export class AblyRelayClient {
   private handleMessage(data: unknown) {
     this.diagnostics.messagesReceived += 1
 
-    let payload = data
-    if (typeof data === 'string') {
+    const decoded = decodeAblyPayload(data)
+    if (!decoded.ok) {
+      this.diagnostics.parseErrors += 1
+      this.diagnostics.lastError = decoded.error
+      this.emitDiagnostics(true)
+      return
+    }
+
+    let payload = decoded.payload
+    if (typeof payload === 'string') {
       try {
-        payload = JSON.parse(data)
+        payload = JSON.parse(payload)
       } catch {
         this.diagnostics.parseErrors += 1
         this.diagnostics.lastError = 'Non-JSON Ably telemetry frame ignored'
@@ -220,4 +228,31 @@ export class AblyRelayClient {
         : 0
     }
   }
+}
+
+function decodeAblyPayload(data: unknown): { ok: true; payload: unknown } | { ok: false; error: string } {
+  if (typeof data === 'string') return { ok: true, payload: data }
+  if (data instanceof ArrayBuffer) {
+    return { ok: true, payload: new TextDecoder().decode(new Uint8Array(data)) }
+  }
+  if (ArrayBuffer.isView(data)) {
+    return {
+      ok: true,
+      payload: new TextDecoder().decode(new Uint8Array(data.buffer, data.byteOffset, data.byteLength)),
+    }
+  }
+
+  if (isNodeBufferJson(data)) {
+    return { ok: true, payload: new TextDecoder().decode(Uint8Array.from(data.data)) }
+  }
+
+  return { ok: true, payload: data }
+}
+
+function isNodeBufferJson(data: unknown): data is { type: 'Buffer'; data: number[] } {
+  if (!data || typeof data !== 'object') return false
+  const candidate = data as { type?: unknown; data?: unknown }
+  return candidate.type === 'Buffer' &&
+    Array.isArray(candidate.data) &&
+    candidate.data.every((value) => Number.isInteger(value) && value >= 0 && value <= 255)
 }
