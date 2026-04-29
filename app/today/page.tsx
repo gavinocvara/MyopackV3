@@ -220,7 +220,7 @@ export default function TodayPage() {
     hasRecentTelemetry &&
     trustedFrameSource &&
     deviceDiagnostics.inputHz >= 5
-  const canStartSession = liveTelemetryReady && readiness.state === 'ready'
+  const canStartSession = liveTelemetryReady && (readiness.state === 'ready' || readiness.state === 'caution')
   const graphRate = estimateHistoryRateHz(history)
   const rateLabel = dataSource === 'device' || dataSource === 'relay'
     ? `${Math.round(deviceDiagnostics.inputHz || deviceDiagnostics.expectedStreamHz || 0)} Hz`

@@ -34,15 +34,14 @@ export interface ElectrodeReadiness {
 
 const MIN_SAMPLES = 24
 const SATURATION_EDGE_HIGH = 96
-const MAX_READY_PEAK = 95
-const MAX_READY_AVERAGE = 62
-const MAX_READY_BASELINE_AVERAGE = 35
-const MAX_READY_BASELINE_RANGE = 28
-const MIN_READY_RANGE = 8
-const MIN_READY_RESPONSE_DELTA = 8
+const MAX_READY_AVERAGE = 76
+const MAX_READY_BASELINE_AVERAGE = 55
+const MAX_READY_BASELINE_RANGE = 40
+const MIN_READY_RANGE = 6
+const MIN_READY_RESPONSE_DELTA = 5
 const MIN_READY_ELEVATED_RUN = 3
-const MAX_LARGE_JUMP_RATIO = 0.2
-const MAX_EDGE_HIT_RATIO = 0.12
+const MAX_LARGE_JUMP_RATIO = 0.34
+const MAX_EDGE_HIT_RATIO = 0.18
 
 export function recommendSensorPair(
   samples: EMGHistoryPoint[],
@@ -157,12 +156,12 @@ function summarizeReadiness(
     }
   }
 
-  if (hasCaution || score < 88) {
+  if (hasCaution || score < 74) {
     return {
       state: 'caution',
       score,
       headline: 'Usable, but improve contact',
-      summary: 'The app is still blocking the run until the selected live channels show a quiet baseline and one clean test contraction.',
+      summary: 'Signal is usable for a live test, but cleaner contact will make the trend smoother.',
       samples: samples.length,
       arrays,
     }
@@ -228,14 +227,12 @@ function analyzeArray(values: number[], side: 'left' | 'right', channelIndex?: C
   const responseDelta = max - baselineAverage
 
   const saturated =
-    max >= 99 ||
-    max > MAX_READY_PEAK ||
     average > MAX_READY_AVERAGE ||
     edgeHitRatio > MAX_EDGE_HIT_RATIO
   const flat = range < 1.5
   const weak = max < 8 && range < 5
   const noisyFloating =
-    range > 82 ||
+    range > 94 ||
     largeJumpRatio > MAX_LARGE_JUMP_RATIO ||
     edgeHitRatio > MAX_EDGE_HIT_RATIO
   const missingQuietBaseline =
@@ -263,7 +260,7 @@ function analyzeArray(values: number[], side: 'left' | 'right', channelIndex?: C
 
   let state: ReadinessState = 'ready'
   if (saturated || noisyFloating || missingQuietBaseline || flat || weak) state = 'not-ready'
-  else if (!responsive || score < 88) state = 'caution'
+  else if (!responsive || score < 74) state = 'caution'
 
   return {
     id: side,

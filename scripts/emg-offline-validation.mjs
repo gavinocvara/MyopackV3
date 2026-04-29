@@ -219,6 +219,31 @@ test('readiness accepts quiet baseline plus sustained contraction', () => {
   assert.equal(result.state, 'ready')
 })
 
+test('readiness allows usable two-sided live contact without perfect baseline', () => {
+  const samples = Array.from({ length: 30 }, (_, index) => {
+    const rise = index < 8 ? 18 + (index % 3) : 24 + Math.min(18, index)
+    return {
+      timestamp: index * 50,
+      values: [
+        rise - 2 + (index % 3),
+        0,
+        rise + (index % 2),
+        0,
+      ],
+    }
+  })
+  const result = readiness.analyzeElectrodeReadinessForRoute(samples, selection.routeFromPair('pairA'), 'bilateral')
+  assert.equal(result.state === 'ready' || result.state === 'caution', true)
+})
+
+test('telemetry smoothing trends toward live data without snapping', () => {
+  const first = ingestion.smoothTelemetryChannels(null, [0, 0, 0, 0])
+  const second = ingestion.smoothTelemetryChannels(first, [80, 20, 60, 10])
+  assert.deepEqual(first, [0, 0, 0, 0])
+  assert.equal(second[0] > 0 && second[0] < 80, true)
+  assert.equal(second[2] > second[3], true)
+})
+
 test('ingestion freezes live EMG when monitoring is stopped but still records precheck', () => {
   const state = {
     emgData: calculations.DEFAULT_EMG_DATA,

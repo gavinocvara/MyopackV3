@@ -26,6 +26,7 @@ import { DEFAULT_RELAY_DEVICE_ID } from '@/lib/device/relay-config'
 import {
   appendHistoryPoint,
   emgDataFromChannels,
+  smoothTelemetryChannels,
   type EMGHistoryPoint,
 } from '@/lib/emg/ingestion'
 import type {
@@ -100,6 +101,7 @@ export function EMGProvider({ children }: { children: ReactNode }) {
   const relayClientRef = useRef<AblyRelayClient | null>(null)
   const isMonitoringRef = useRef(false)
   const isPrecheckingRef = useRef(false)
+  const smoothedChannelsRef = useRef<[number, number, number, number] | null>(null)
 
   useEffect(() => {
     isMonitoringRef.current = isMonitoring
@@ -175,6 +177,7 @@ export function EMGProvider({ children }: { children: ReactNode }) {
     setPrecheckSamples([])
     setEmgData(DEFAULT_EMG_DATA)
     setTemperature(DEFAULT_TEMP)
+    smoothedChannelsRef.current = null
   }, [])
 
   const pushHistory = useCallback((values: [number, number, number, number], timestamp = Date.now()) => {
@@ -212,8 +215,10 @@ export function EMGProvider({ children }: { children: ReactNode }) {
 
     if (!isMonitoringRef.current) return
 
-    setEmgData(emgDataFromChannels(values, timestamp))
-    pushHistory(values, timestamp)
+    const smoothed = smoothTelemetryChannels(smoothedChannelsRef.current, values)
+    smoothedChannelsRef.current = smoothed
+    setEmgData(emgDataFromChannels(smoothed, timestamp))
+    pushHistory(smoothed, timestamp)
   }, [pushHistory, pushPrecheckSample])
 
   const ensureClient = useCallback((): DeviceClient => {
@@ -369,6 +374,7 @@ export function EMGProvider({ children }: { children: ReactNode }) {
     stopSessionTimer()
     setSessionTime(0)
     setHistory([])
+    smoothedChannelsRef.current = null
     sessionTimerRef.current = setInterval(() => {
       setSessionTime((t) => t + 1)
     }, 1000)
@@ -382,6 +388,7 @@ export function EMGProvider({ children }: { children: ReactNode }) {
     isMonitoringRef.current = false
     stopSessionTimer()
     stopSimTimers()
+    smoothedChannelsRef.current = null
   }, [stopSessionTimer, stopSimTimers])
 
   const toggleMonitoring = useCallback(() => {

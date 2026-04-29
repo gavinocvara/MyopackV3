@@ -5,6 +5,8 @@ export interface EMGHistoryPoint {
   values: [number, number, number, number]
 }
 
+export const EMPTY_CHANNEL_VALUES: [number, number, number, number] = [0, 0, 0, 0]
+
 export interface EMGIngestionState {
   emgData: EMGData
   history: EMGHistoryPoint[]
@@ -36,6 +38,21 @@ export function emgDataFromChannels(
   }
 }
 
+export function smoothTelemetryChannels(
+  previous: [number, number, number, number] | null,
+  incoming: [number, number, number, number]
+): [number, number, number, number] {
+  if (!previous) return incoming
+
+  return incoming.map((target, index) => {
+    const current = previous[index]
+    const delta = target - current
+    const alpha = Math.abs(delta) > 24 ? 0.42 : 0.28
+    const next = current + delta * alpha
+    return clampPercent(next)
+  }) as [number, number, number, number]
+}
+
 export function appendHistoryPoint(
   prev: EMGHistoryPoint[],
   values: [number, number, number, number],
@@ -44,6 +61,10 @@ export function appendHistoryPoint(
 ): EMGHistoryPoint[] {
   const next = [...prev, { timestamp, values }]
   return next.length > maxPoints ? next.slice(next.length - maxPoints) : next
+}
+
+function clampPercent(value: number): number {
+  return Math.max(0, Math.min(100, value))
 }
 
 export function applyTelemetryIngestion(
