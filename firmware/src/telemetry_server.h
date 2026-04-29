@@ -28,7 +28,7 @@ namespace MpTelemetry {
 
   // Feed the current channel % values (0–100) — latched internally
   // and broadcast on next tick.
-  void update(float lq, float rq, float lh, float rh, bool monitoring);
+  void update(float lq, float rq, float lh, float rh, bool monitoring, const char* source = "ads");
 
   // Set the human-readable label for a channel (0–3).
   // Call after loading from NVS in setup(); call again on serial/WS change.

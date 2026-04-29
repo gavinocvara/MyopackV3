@@ -163,6 +163,18 @@ export function EMGProvider({ children }: { children: ReactNode }) {
     }
   }, [])
 
+  const resetLiveState = useCallback(() => {
+    isMonitoringRef.current = false
+    isPrecheckingRef.current = false
+    setIsMonitoring(false)
+    setIsPrechecking(false)
+    setSessionTime(0)
+    setHistory([])
+    setPrecheckSamples([])
+    setEmgData(DEFAULT_EMG_DATA)
+    setTemperature(DEFAULT_TEMP)
+  }, [])
+
   const pushHistory = useCallback((values: [number, number, number, number], timestamp = Date.now()) => {
     setHistory((prev) => appendHistoryPoint(prev, values, timestamp, MAX_HISTORY_POINTS))
   }, [])
@@ -244,11 +256,14 @@ export function EMGProvider({ children }: { children: ReactNode }) {
     setDeviceAddress(target)
     setDataSourceState('device')
     stopSimTimers()
+    stopSessionTimer()
+    stopPrecheckTimer()
+    resetLiveState()
     relayClientRef.current?.disconnect()
     setDeviceDiagnostics(DEFAULT_DEVICE_DIAGNOSTICS)
     const client = ensureClient()
     client.connect(target)
-  }, [ensureClient, stopSimTimers])
+  }, [ensureClient, resetLiveState, stopPrecheckTimer, stopSessionTimer, stopSimTimers])
 
   const connectRelay = useCallback((deviceId?: string) => {
     const relayDeviceId = deviceId || process.env.NEXT_PUBLIC_MYOPACK_DEVICE_ID || DEFAULT_RELAY_DEVICE_ID
@@ -256,11 +271,14 @@ export function EMGProvider({ children }: { children: ReactNode }) {
     setDeviceFirmwareVersion(null)
     setDataSourceState('relay')
     stopSimTimers()
+    stopSessionTimer()
+    stopPrecheckTimer()
+    resetLiveState()
     deviceClientRef.current?.disconnect()
     setDeviceDiagnostics(DEFAULT_DEVICE_DIAGNOSTICS)
     const client = ensureRelayClient()
     client.connect(relayDeviceId)
-  }, [ensureRelayClient, stopSimTimers])
+  }, [ensureRelayClient, resetLiveState, stopPrecheckTimer, stopSessionTimer, stopSimTimers])
 
   const disconnectDevice = useCallback(() => {
     deviceClientRef.current?.disconnect()
@@ -376,18 +394,22 @@ export function EMGProvider({ children }: { children: ReactNode }) {
     setDataSourceState(source)
     if (source === 'device') {
       stopSimTimers()
+      stopSessionTimer()
       stopPrecheckTimer()
+      resetLiveState()
       relayClientRef.current?.disconnect()
     } else if (source === 'relay') {
       stopSimTimers()
+      stopSessionTimer()
       stopPrecheckTimer()
+      resetLiveState()
       deviceClientRef.current?.disconnect()
     } else if (isMonitoringRef.current) {
       deviceClientRef.current?.disconnect()
       relayClientRef.current?.disconnect()
       startSimulation()
     }
-  }, [startSimulation, stopPrecheckTimer, stopSimTimers])
+  }, [resetLiveState, startSimulation, stopPrecheckTimer, stopSessionTimer, stopSimTimers])
 
   useEffect(() => {
     return () => {

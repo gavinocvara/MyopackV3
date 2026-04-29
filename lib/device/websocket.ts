@@ -31,6 +31,7 @@ export interface DeviceTelemetryDiagnostics {
   expectedStreamHz: number | null
   sampleHz: number | null
   lastFrameAt: number | null
+  lastFrameSource: 'ads' | 'firmware-sim' | null
   lastError: string | null
 }
 
@@ -55,6 +56,7 @@ export const DEFAULT_DEVICE_DIAGNOSTICS: DeviceTelemetryDiagnostics = {
   expectedStreamHz: null,
   sampleHz: null,
   lastFrameAt: null,
+  lastFrameSource: null,
   lastError: null,
 }
 
@@ -247,6 +249,7 @@ export class DeviceClient {
     const now = Date.now()
     this.diagnostics.telemetryFrames += 1
     this.diagnostics.lastFrameAt = now
+    if (frame.source) this.diagnostics.lastFrameSource = frame.source
     if (typeof frame.streamHz === 'number') this.diagnostics.expectedStreamHz = frame.streamHz
     if (typeof frame.sampleHz === 'number') this.diagnostics.sampleHz = frame.sampleHz
 

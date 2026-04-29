@@ -200,6 +200,7 @@ export class AblyRelayClient {
     const now = Date.now()
     this.diagnostics.telemetryFrames += 1
     this.diagnostics.lastFrameAt = now
+    if (frame.source) this.diagnostics.lastFrameSource = frame.source
     if (typeof frame.streamHz === 'number') this.diagnostics.expectedStreamHz = frame.streamHz
     if (typeof frame.sampleHz === 'number') this.diagnostics.sampleHz = frame.sampleHz
 

@@ -17,8 +17,9 @@ namespace {
   struct Latched {
     float lq, rq, lh, rh;
     bool  monitoring;
+    const char* source;
   };
-  Latched latched = { 0, 0, 0, 0, false };
+  Latched latched = { 0, 0, 0, 0, false, "ads" };
 
   // Channel labels — updated via setLabel(), persisted in NVS by caller
   char chLabels[4][MP_LABEL_MAX_LEN] = {
@@ -120,12 +121,13 @@ void setLabelChangeHandler(LabelChangeHandler handler) {
   labelChangeHandler = handler;
 }
 
-void update(float lq, float rq, float lh, float rh, bool monitoring) {
+void update(float lq, float rq, float lh, float rh, bool monitoring, const char* source) {
   latched.lq = lq;
   latched.rq = rq;
   latched.lh = lh;
   latched.rh = rh;
   latched.monitoring = monitoring;
+  latched.source = source ? source : "ads";
 }
 
 uint8_t clientCount() { return clients; }
@@ -161,6 +163,7 @@ void loop() {
   doc["qsym"]  = b.quadSym;
   doc["hsym"]  = b.hamSym;
   doc["state"] = latched.monitoring ? "monitoring" : "idle";
+  doc["source"] = latched.source;
 
   char buf[512];
   size_t n = serializeJson(doc, buf);

@@ -129,6 +129,18 @@ test('telemetry parser clamps out-of-range activation with warnings', () => {
   assert.equal(parsed.warnings.length >= 2, true)
 })
 
+test('telemetry parser preserves firmware source marker', () => {
+  const ads = deviceTypes.parseTelemetryFrame({ t: 1, ch: [1, 2, 3, 4], source: 'ads' })
+  const sim = deviceTypes.parseTelemetryFrame({ t: 2, ch: [5, 6, 7, 8], source: 'firmware-sim' })
+  const unknown = deviceTypes.parseTelemetryFrame({ t: 3, ch: [9, 10, 11, 12], source: 'other' })
+  assert.equal(ads.ok, true)
+  assert.equal(ads.frame.source, 'ads')
+  assert.equal(sim.ok, true)
+  assert.equal(sim.frame.source, 'firmware-sim')
+  assert.equal(unknown.ok, true)
+  assert.equal(unknown.frame.source, undefined)
+})
+
 test('physical channel route stays left chip vs right chip', () => {
   assert.deepEqual(Array.from(selection.LEFT_CHANNEL_CANDIDATES), [0, 1])
   assert.deepEqual(Array.from(selection.RIGHT_CHANNEL_CANDIDATES), [2, 3])

@@ -20,6 +20,7 @@ export interface TelemetryFrame {
   qsym?: number    // quad L/R symmetry %
   hsym?: number    // ham L/R symmetry %
   state?: 'monitoring' | 'idle'
+  source?: 'ads' | 'firmware-sim'
   streamHz?: number
   sampleHz?: number
 }
@@ -34,6 +35,7 @@ export interface NormalizedTelemetryFrame {
   qsym?: number
   hsym?: number
   state?: 'monitoring' | 'idle'
+  source?: 'ads' | 'firmware-sim'
   seq?: number
   streamHz?: number
   sampleHz?: number
@@ -99,6 +101,7 @@ export function parseTelemetryFrame(
     qsym: parseOptionalPercent(raw.qsym, 'qsym', warnings),
     hsym: parseOptionalPercent(raw.hsym, 'hsym', warnings),
     state: raw.state === 'monitoring' || raw.state === 'idle' ? raw.state : undefined,
+    source: raw.source === 'ads' || raw.source === 'firmware-sim' ? raw.source : undefined,
     seq: Number.isFinite(raw.seq) ? Number(raw.seq) : undefined,
     streamHz: Number.isFinite(raw.streamHz) ? Number(raw.streamHz) : undefined,
     sampleHz: Number.isFinite(raw.sampleHz) ? Number(raw.sampleHz) : undefined,

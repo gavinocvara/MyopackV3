@@ -93,6 +93,14 @@ export default function VitalsPage() {
   const rateLabel = inputRate > 0 ? `${Math.round(inputRate)} Hz` : 'Hold'
   const lastFrameAge =
     deviceDiagnostics.lastFrameAt === null ? null : Math.max(0, Date.now() - deviceDiagnostics.lastFrameAt)
+  const sourceLabel =
+    dataSource === 'simulated'
+      ? 'Browser SIM'
+      : deviceDiagnostics.lastFrameSource === 'firmware-sim'
+        ? 'Firmware SIM'
+        : deviceDiagnostics.lastFrameSource === 'ads'
+          ? 'ADS live'
+          : 'Waiting'
 
   return (
     <motion.div
@@ -288,6 +296,7 @@ export default function VitalsPage() {
             { label: 'Parse errors', value: `${deviceDiagnostics.parseErrors + deviceDiagnostics.invalidFrames}` },
             { label: 'Route', value: `L${channelRoute.leftIndex} / R${channelRoute.rightIndex}` },
             { label: 'Frame age', value: lastFrameAge === null ? '--' : `${Math.round(lastFrameAge)} ms` },
+            { label: 'Frame source', value: sourceLabel },
           ].map((item) => (
             <div key={item.label} className="rounded-2xl p-3" style={{ background: 'rgba(0,0,0,0.14)', border: '1px solid var(--mp-line)' }}>
               <p className="text-[9px] font-bold uppercase tracking-[0.12em]" style={{ color: 'var(--mp-t4)' }}>
