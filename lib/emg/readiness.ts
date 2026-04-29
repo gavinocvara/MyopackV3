@@ -32,7 +32,17 @@ export interface ElectrodeReadiness {
   arrays: ElectrodeArrayReadiness[]
 }
 
-const MIN_SAMPLES = 18
+const MIN_SAMPLES = 24
+const SATURATION_EDGE_HIGH = 96
+const MAX_READY_PEAK = 95
+const MAX_READY_AVERAGE = 62
+const MAX_READY_BASELINE_AVERAGE = 35
+const MAX_READY_BASELINE_RANGE = 28
+const MIN_READY_RANGE = 8
+const MIN_READY_RESPONSE_DELTA = 8
+const MIN_READY_ELEVATED_RUN = 3
+const MAX_LARGE_JUMP_RATIO = 0.2
+const MAX_EDGE_HIT_RATIO = 0.12
 
 export function recommendSensorPair(
   samples: EMGHistoryPoint[],
@@ -147,12 +157,12 @@ function summarizeReadiness(
     }
   }
 
-  if (hasCaution || score < 78) {
+  if (hasCaution || score < 88) {
     return {
       state: 'caution',
       score,
       headline: 'Usable, but improve contact',
-      summary: 'A session can start, but the signal would be stronger with cleaner contact or a clearer test contraction.',
+      summary: 'The app is still blocking the run until the selected live channels show a quiet baseline and one clean test contraction.',
       samples: samples.length,
       arrays,
     }
@@ -204,26 +214,56 @@ function analyzeArray(values: number[], side: 'left' | 'right', channelIndex?: C
   const max = Math.max(...values)
   const average = values.reduce((sum, value) => sum + value, 0) / values.length
   const range = max - min
-  const saturated = max >= 98 || min <= -1
-  const flat = range < 1.2
-  const weak = max < 8 && range < 4
-  const responsive = range >= 5 || max >= 18
+  const baselineWindow = values.slice(0, Math.max(6, Math.floor(values.length / 4)))
+  const baselineMin = Math.min(...baselineWindow)
+  const baselineMax = Math.max(...baselineWindow)
+  const baselineAverage = baselineWindow.reduce((sum, value) => sum + value, 0) / baselineWindow.length
+  const baselineRange = baselineMax - baselineMin
+  const largeJumps = countLargeJumps(values)
+  const largeJumpRatio = values.length > 1 ? largeJumps / (values.length - 1) : 0
+  const edgeHits = values.filter((value) => value >= SATURATION_EDGE_HIGH).length
+  const edgeHitRatio = edgeHits / values.length
+  const elevatedThreshold = Math.max(12, baselineAverage + MIN_READY_RESPONSE_DELTA)
+  const elevatedRun = longestRun(values, (value) => value >= elevatedThreshold)
+  const responseDelta = max - baselineAverage
+
+  const saturated =
+    max >= 99 ||
+    max > MAX_READY_PEAK ||
+    average > MAX_READY_AVERAGE ||
+    edgeHitRatio > MAX_EDGE_HIT_RATIO
+  const flat = range < 1.5
+  const weak = max < 8 && range < 5
+  const noisyFloating =
+    range > 82 ||
+    largeJumpRatio > MAX_LARGE_JUMP_RATIO ||
+    edgeHitRatio > MAX_EDGE_HIT_RATIO
+  const missingQuietBaseline =
+    baselineAverage > MAX_READY_BASELINE_AVERAGE ||
+    baselineRange > MAX_READY_BASELINE_RANGE ||
+    baselineMin > 28
+  const responsive =
+    range >= MIN_READY_RANGE &&
+    responseDelta >= MIN_READY_RESPONSE_DELTA &&
+    elevatedRun >= MIN_READY_ELEVATED_RUN
   const issues: string[] = []
 
-  if (saturated) issues.push(`${capitalize(side)} array looks saturated; reseat the active leads.`)
+  if (saturated) issues.push(`${capitalize(side)} array is saturated or floating high; attach the red/green leads and reseat the plug.`)
+  if (noisyFloating) issues.push(`${capitalize(side)} array is jumping like an open input; secure the snap leads and cable strain relief.`)
+  if (missingQuietBaseline) issues.push(`${capitalize(side)} array needs a quiet low baseline first; keep the muscle relaxed when the check starts.`)
   if (flat) issues.push(`${capitalize(side)} array is too flat; confirm the electrodes are attached.`)
   if (weak) issues.push(`${capitalize(side)} array response is weak; try cleaning skin or pressing the pad edges down.`)
-  if (!responsive && !flat && !weak) issues.push(`${capitalize(side)} array needs a clearer gentle test contraction.`)
+  if (!responsive && !flat && !weak) issues.push(`${capitalize(side)} array needs one smooth gentle contraction after the quiet baseline.`)
 
-  const responseScore = Math.min(38, range * 3.2)
-  const peakScore = Math.min(26, max * 1.15)
-  const stabilityScore = saturated ? 0 : 22
-  const baselineScore = average > 0.5 && average < 96 ? 14 : 4
-  const score = Math.max(0, Math.min(100, Math.round(responseScore + peakScore + stabilityScore + baselineScore)))
+  const baselineScore = missingQuietBaseline ? 0 : 28
+  const responseScore = responsive ? Math.min(34, responseDelta * 2.2 + elevatedRun * 2) : Math.min(18, range * 1.4)
+  const stabilityScore = noisyFloating ? 0 : 22
+  const saturationScore = saturated ? 0 : 16
+  const score = Math.max(0, Math.min(100, Math.round(baselineScore + responseScore + stabilityScore + saturationScore)))
 
   let state: ReadinessState = 'ready'
-  if (saturated || flat || weak) state = 'not-ready'
-  else if (!responsive || score < 78) state = 'caution'
+  if (saturated || noisyFloating || missingQuietBaseline || flat || weak) state = 'not-ready'
+  else if (!responsive || score < 88) state = 'caution'
 
   return {
     id: side,
@@ -236,6 +276,28 @@ function analyzeArray(values: number[], side: 'left' | 'right', channelIndex?: C
     average: Math.round(average),
     issues,
   }
+}
+
+function countLargeJumps(values: number[]): number {
+  let jumps = 0
+  for (let i = 1; i < values.length; i += 1) {
+    if (Math.abs(values[i] - values[i - 1]) > 28) jumps += 1
+  }
+  return jumps
+}
+
+function longestRun(values: number[], predicate: (value: number) => boolean): number {
+  let best = 0
+  let current = 0
+  for (const value of values) {
+    if (predicate(value)) {
+      current += 1
+      best = Math.max(best, current)
+    } else {
+      current = 0
+    }
+  }
+  return best
 }
 
 function capitalize(value: string): string {

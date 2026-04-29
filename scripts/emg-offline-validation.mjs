@@ -184,6 +184,41 @@ test('readiness recommendation stays inside each physical side', () => {
   assert.deepEqual(plain(route), { leftIndex: 2, rightIndex: 1 })
 })
 
+test('readiness rejects no-lead floating and saturated inputs', () => {
+  const floating = [42, 3, 88, 6, 91, 2, 75, 8, 96, 4, 83, 7]
+  const samples = Array.from({ length: 30 }, (_, index) => ({
+    timestamp: index * 50,
+    values: [
+      floating[index % floating.length],
+      0,
+      100,
+      0,
+    ],
+  }))
+  const result = readiness.analyzeElectrodeReadinessForRoute(samples, selection.routeFromPair('pairA'), 'bilateral')
+  assert.equal(result.state, 'not-ready')
+})
+
+test('readiness accepts quiet baseline plus sustained contraction', () => {
+  const signal = [
+    2, 2, 2, 3, 3, 2, 3, 4,
+    8, 12, 18, 24, 31, 38, 42, 39,
+    32, 24, 16, 10, 6, 4, 3, 3,
+    2, 2, 2, 3, 3, 2,
+  ]
+  const samples = signal.map((value, index) => ({
+    timestamp: index * 50,
+    values: [
+      value,
+      0,
+      value + (index % 3 === 0 ? 1 : 0),
+      0,
+    ],
+  }))
+  const result = readiness.analyzeElectrodeReadinessForRoute(samples, selection.routeFromPair('pairA'), 'bilateral')
+  assert.equal(result.state, 'ready')
+})
+
 test('ingestion freezes live EMG when monitoring is stopped but still records precheck', () => {
   const state = {
     emgData: calculations.DEFAULT_EMG_DATA,

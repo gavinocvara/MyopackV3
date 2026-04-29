@@ -181,6 +181,7 @@ export default function TodayPage() {
     stopPrecheck,
     resetPrecheck,
     dataSource,
+    deviceState,
     deviceDiagnostics,
   } = useEMG()
   const {
@@ -205,7 +206,21 @@ export default function TodayPage() {
   const status = getBalanceStatus(sideMode === 'bilateral' ? values.symmetry : activation)
   const readiness = analyzeElectrodeReadinessForRoute(precheckSamples, channelRoute, sideMode)
   const recommendedRoute = recommendChannelRoute(precheckSamples, channelRoute, sideMode)
-  const canStartSession = readiness.state === 'ready' || readiness.state === 'caution'
+  const liveSource = dataSource === 'device' || dataSource === 'relay'
+  const hasRecentTelemetry =
+    deviceDiagnostics.lastFrameAt !== null &&
+    Date.now() - deviceDiagnostics.lastFrameAt < 2500
+  const trustedFrameSource =
+    dataSource === 'relay'
+      ? deviceDiagnostics.lastFrameSource === 'ads'
+      : deviceDiagnostics.lastFrameSource !== 'firmware-sim'
+  const liveTelemetryReady =
+    liveSource &&
+    deviceState === 'connected' &&
+    hasRecentTelemetry &&
+    trustedFrameSource &&
+    deviceDiagnostics.inputHz >= 5
+  const canStartSession = liveTelemetryReady && readiness.state === 'ready'
   const graphRate = estimateHistoryRateHz(history)
   const rateLabel = dataSource === 'device' || dataSource === 'relay'
     ? `${Math.round(deviceDiagnostics.inputHz || deviceDiagnostics.expectedStreamHz || 0)} Hz`
@@ -652,7 +667,7 @@ export default function TodayPage() {
               isMonitoring={isMonitoring}
               onToggle={handleSessionToggle}
               disabled={!canStartSession}
-              idleLabel={canStartSession ? 'Begin Session' : 'Run Pre-Check First'}
+              idleLabel={canStartSession ? 'Begin Session' : liveTelemetryReady ? 'Pass Electrode Check' : 'Connect Live Board'}
             />
 
             <div className="flex items-center gap-2 rounded-2xl p-4" style={{ background: 'rgba(255,255,255,0.035)' }}>

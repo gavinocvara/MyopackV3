@@ -106,14 +106,16 @@ export function simulateEMGTick(current: EMGData): EMGData {
 }
 
 /**
- * Default initial EMG state (matches C++ initial values)
+ * Default initial EMG state.
+ * Keep this at zero so the UI never displays invented activity before live
+ * telemetry has passed the electrode readiness gate.
  */
 export const DEFAULT_EMG_DATA: EMGData = {
-  leftQuad: 65.0,
-  rightQuad: 58.0,
-  leftHam: 72.0,
-  rightHam: 70.0,
-  balance: 88.0,
+  leftQuad: 0.0,
+  rightQuad: 0.0,
+  leftHam: 0.0,
+  rightHam: 0.0,
+  balance: 100.0,
 }
 
 export const DEFAULT_TEMP = 32.4

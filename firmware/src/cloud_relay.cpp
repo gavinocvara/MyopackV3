@@ -16,9 +16,10 @@ namespace {
   struct Latched {
     float l1, l2, r1, r2;
     bool monitoring;
+    const char* source;
   };
 
-  Latched latched = { 0, 0, 0, 0, false };
+  Latched latched = { 0, 0, 0, 0, false, "ads" };
   char chLabels[4][MP_LABEL_MAX_LEN] = {
     MP_DEFAULT_LABEL0,
     MP_DEFAULT_LABEL1,
@@ -157,6 +158,7 @@ namespace {
     doc["bal"] = b.balance;
     doc["qsym"] = b.quadSym;
     doc["hsym"] = b.hamSym;
+    doc["source"] = latched.source;
     doc["state"] = latched.monitoring ? "monitoring" : "idle";
 
     char buf[512];
@@ -190,12 +192,13 @@ void loop() {
 #endif
 }
 
-void update(float l1, float l2, float r1, float r2, bool monitoring) {
+void update(float l1, float l2, float r1, float r2, bool monitoring, const char* source) {
   latched.l1 = l1;
   latched.l2 = l2;
   latched.r1 = r1;
   latched.r2 = r2;
   latched.monitoring = monitoring;
+  latched.source = source ? source : "ads";
 }
 
 void setLabel(uint8_t ch, const char* name) {

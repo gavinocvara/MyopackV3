@@ -12,6 +12,7 @@
 //     "ch": [67.3, 71.2, 83.1, 79.4],          // [left primary,left alt,right primary,right alt]
 //     "labels": ["Left Bicep","Left Bicep B","Right Bicep","Right Bicep B"],
 //     "bal": 84.6, "qsym": 96.0, "hsym": 93.0,
+//     "source": "ads" | "firmware-sim",
 //     "state": "monitoring" | "idle"
 //   }
 //
@@ -28,7 +29,7 @@ namespace MpTelemetry {
 
   // Feed the current channel % values (0–100) — latched internally
   // and broadcast on next tick.
-  void update(float lq, float rq, float lh, float rh, bool monitoring);
+  void update(float lq, float rq, float lh, float rh, bool monitoring, const char* source);
 
   // Set the human-readable label for a channel (0–3).
   // Call after loading from NVS in setup(); call again on serial/WS change.

@@ -373,8 +373,9 @@ void loop() {
     }
   }
 
-  MpTelemetry::update(pct_L1, pct_L2, pct_R1, pct_R2, /*monitoring=*/true);
-  MpCloudRelay::update(pct_L1, pct_L2, pct_R1, pct_R2, /*monitoring=*/true);
+  const char* telemetrySource = sim_force ? "firmware-sim" : "ads";
+  MpTelemetry::update(pct_L1, pct_L2, pct_R1, pct_R2, /*monitoring=*/true, telemetrySource);
+  MpCloudRelay::update(pct_L1, pct_L2, pct_R1, pct_R2, /*monitoring=*/true, telemetrySource);
 
   // Heartbeat log every 5 s
   uint32_t now = millis();
