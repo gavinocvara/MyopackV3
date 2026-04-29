@@ -96,7 +96,6 @@ const calculations = loadTs('lib/emg/calculations.ts')
 const selection = loadTs('lib/muscle-selection.ts')
 const readiness = loadTs('lib/emg/readiness.ts')
 const ingestion = loadTs('lib/emg/ingestion.ts')
-const displayConditioning = loadTs('lib/emg/display-conditioning.ts')
 const synthetic = loadTs('lib/emg/synthetic.ts')
 
 test('telemetry parser accepts ch[] + labels[] and normalizes timestamp', () => {
@@ -238,35 +237,11 @@ test('readiness allows usable two-sided live contact without perfect baseline', 
 })
 
 test('telemetry smoothing trends toward live data without snapping', () => {
-  let states = displayConditioning.createInitialConditionedStates()
-  let frame
-  for (let i = 0; i < 8; i += 1) {
-    frame = displayConditioning.conditionDisplayFrame([8 + i, 2, 7 + i, 2], i * 50, states)
-    states = frame.states
-  }
-  frame = displayConditioning.conditionDisplayFrame([80, 20, 60, 10], 50, states)
-  assert.equal(frame.sample.values[0] > 0 && frame.sample.values[0] < 80, true)
-  assert.equal(frame.sample.values[2] > frame.sample.values[3], true)
-})
-
-test('display conditioning does not mutate raw telemetry history contract', () => {
-  const rawValues = [80, 20, 60, 10]
-  const history = ingestion.appendHistoryPoint([], rawValues, 100, 120)
-  let states = displayConditioning.createInitialConditionedStates()
-  const display = displayConditioning.conditionDisplayFrame(rawValues, 100, states)
-  assert.deepEqual(history[0].values, rawValues)
-  assert.notDeepEqual(display.sample.values, rawValues)
-})
-
-test('display conditioning drops confidence for disconnected flat channels', () => {
-  let states = displayConditioning.createInitialConditionedStates()
-  let frame
-  for (let i = 0; i < 10; i += 1) {
-    frame = displayConditioning.conditionDisplayFrame([0, 0, 20 + i, 0], i * 50, states)
-    states = frame.states
-  }
-  assert.equal(frame.sample.confidence[0].connected, false)
-  assert.equal(frame.sample.confidence[2].connected, true)
+  const first = ingestion.smoothTelemetryChannels(null, [0, 0, 0, 0])
+  const second = ingestion.smoothTelemetryChannels(first, [80, 20, 60, 10])
+  assert.deepEqual(first, [0, 0, 0, 0])
+  assert.equal(second[0] > 0 && second[0] < 80, true)
+  assert.equal(second[2] > second[3], true)
 })
 
 test('ingestion freezes live EMG when monitoring is stopped but still records precheck', () => {

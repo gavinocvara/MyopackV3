@@ -171,13 +171,11 @@ export default function TodayPage() {
   const sessionStartedAtRef = useRef<string | null>(null)
   const {
     emgData,
-    displayEmgData,
     isMonitoring,
     isPrechecking,
     sessionTime,
     toggleMonitoring,
     history,
-    displayHistory,
     precheckSamples,
     startPrecheck,
     stopPrecheck,
@@ -202,10 +200,8 @@ export default function TodayPage() {
 
   const region = getMuscleRegion(selectedGroup ?? 'quads')
   const placementGuide = PLACEMENT_GUIDES[region.id] ?? PLACEMENT_GUIDES.quads
-  const rawValues = getRouteValues(emgData, channelRoute)
-  const values = getRouteValues(displayEmgData, channelRoute)
+  const values = getRouteValues(emgData, channelRoute)
   const activation = getSideActivation(values, sideMode)
-  const rawActivation = getSideActivation(rawValues, sideMode)
   const phase = getActivationPhase(activation)
   const status = getBalanceStatus(sideMode === 'bilateral' ? values.symmetry : activation)
   const readiness = analyzeElectrodeReadinessForRoute(precheckSamples, channelRoute, sideMode)
@@ -263,10 +259,10 @@ export default function TodayPage() {
         sensorPair,
         channelRoute,
         durationSeconds: sessionTime,
-        activation: rawActivation,
-        symmetry: sideMode === 'bilateral' ? rawValues.symmetry : null,
-        leftActivation: sideMode === 'right' ? 0 : rawValues.left,
-        rightActivation: sideMode === 'left' ? 0 : rawValues.right,
+        activation,
+        symmetry: sideMode === 'bilateral' ? values.symmetry : null,
+        leftActivation: sideMode === 'right' ? 0 : values.left,
+        rightActivation: sideMode === 'left' ? 0 : values.right,
         dataSource,
         inputHz: dataSource === 'device' || dataSource === 'relay' ? deviceDiagnostics.inputHz : graphRate,
         droppedFrames: dataSource === 'device' || dataSource === 'relay' ? deviceDiagnostics.droppedFrames : 0,
@@ -617,7 +613,7 @@ export default function TodayPage() {
             </div>
 
             <LiveMuscleGraph
-              history={displayHistory}
+              history={history}
               title={`${region.label} ${sideMode === 'bilateral' ? 'bilateral' : sideMode}`}
               leftLabel={sideMode === 'bilateral' ? `Left ${region.shortLabel}` : primaryLabel}
               rightLabel={sideMode === 'bilateral' ? `Right ${region.shortLabel}` : undefined}
