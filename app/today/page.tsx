@@ -1,6 +1,6 @@
 'use client'
 
-import { useEffect, useRef } from 'react'
+import { useRef } from 'react'
 import { AnimatePresence, motion } from 'framer-motion'
 import { Activity, ChevronLeft } from 'lucide-react'
 import { useEMG } from '@/lib/emg/context'
@@ -11,7 +11,7 @@ import { MuscleModel } from '@/components/dashboard/muscle-model'
 import { SessionButton } from '@/components/dashboard/session-button'
 import { ElectrodeReadinessCheck } from '@/components/dashboard/electrode-readiness-check'
 import { useMuscleSelection } from '@/lib/muscle-selection-context'
-import { analyzeElectrodeReadinessForRoute, recommendChannelRoute } from '@/lib/emg/readiness'
+import { analyzeElectrodeReadinessForRoute } from '@/lib/emg/readiness'
 import { estimateHistoryRateHz } from '@/lib/emg/ingestion'
 import {
   CHANNEL_COLORS,
@@ -194,7 +194,6 @@ export default function TodayPage() {
     selectGroup,
     confirmPlacement,
     setSideMode,
-    setChannelRoute,
     resetSelection,
   } = useMuscleSelection()
 
@@ -205,7 +204,6 @@ export default function TodayPage() {
   const phase = getActivationPhase(activation)
   const status = getBalanceStatus(sideMode === 'bilateral' ? values.symmetry : activation)
   const readiness = analyzeElectrodeReadinessForRoute(precheckSamples, channelRoute, sideMode)
-  const recommendedRoute = recommendChannelRoute(precheckSamples, channelRoute, sideMode)
   const liveSource = dataSource === 'device' || dataSource === 'relay'
   const hasRecentTelemetry =
     deviceDiagnostics.lastFrameAt !== null &&
@@ -220,16 +218,6 @@ export default function TodayPage() {
   const rateLabel = dataSource === 'device' || dataSource === 'relay'
     ? `${Math.round(deviceDiagnostics.inputHz || deviceDiagnostics.expectedStreamHz || 0)} Hz`
     : `${Math.round(graphRate || 20)} Hz`
-
-  useEffect(() => {
-    if (isMonitoring) return
-    if (
-      recommendedRoute.leftIndex !== channelRoute.leftIndex ||
-      recommendedRoute.rightIndex !== channelRoute.rightIndex
-    ) {
-      setChannelRoute(recommendedRoute)
-    }
-  }, [channelRoute.leftIndex, channelRoute.rightIndex, isMonitoring, recommendedRoute, setChannelRoute])
 
   const leftIndex = channelRoute.leftIndex
   const rightIndex = channelRoute.rightIndex
@@ -274,6 +262,12 @@ export default function TodayPage() {
   const handleSelectGroup = (group: MuscleGroup) => {
     resetPrecheck()
     selectGroup(group)
+  }
+
+  const handleSideModeChange = (mode: typeof sideMode) => {
+    if (mode === sideMode) return
+    resetPrecheck()
+    setSideMode(mode)
   }
 
   return (
@@ -594,7 +588,7 @@ export default function TodayPage() {
                 return (
                   <button
                     key={mode.id}
-                    onClick={() => setSideMode(mode.id)}
+                    onClick={() => handleSideModeChange(mode.id)}
                     className="h-10 rounded-xl text-xs font-bold"
                     style={{
                       background: active ? 'rgba(45,212,191,0.14)' : 'transparent',

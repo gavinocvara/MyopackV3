@@ -214,6 +214,47 @@ test('readiness rejects smooth unplugged ADS noise without source rails', () => 
   assert.equal(result.state, 'not-ready')
 })
 
+test('readiness honors selected side and ignores the unplugged opposite side', () => {
+  const live = [
+    2, 2, 2, 3, 3, 2, 3, 4,
+    8, 12, 18, 24, 31, 38, 42, 39,
+    32, 24, 16, 10, 6, 4, 3, 3,
+    2, 2, 2, 3, 3, 2,
+  ]
+  const floating = [34, 52, 38, 61, 44, 67, 49, 71, 46, 63, 39, 58]
+  const route = selection.routeFromPair('pairA')
+
+  const leftOnlySamples = live.map((value, index) => ({
+    timestamp: index * 50,
+    values: [
+      floating[index % floating.length],
+      0,
+      value,
+      0,
+    ],
+  }))
+  const leftOnly = readiness.analyzeElectrodeReadinessForRoute(leftOnlySamples, route, 'left')
+  const bilateralWithRightOpen = readiness.analyzeElectrodeReadinessForRoute(leftOnlySamples, route, 'bilateral')
+  assert.equal(leftOnly.arrays.length, 1)
+  assert.equal(leftOnly.arrays[0].id, 'left')
+  assert.equal(leftOnly.state === 'ready' || leftOnly.state === 'caution', true)
+  assert.equal(bilateralWithRightOpen.state, 'not-ready')
+
+  const rightOnlySamples = live.map((value, index) => ({
+    timestamp: index * 50,
+    values: [
+      value,
+      0,
+      floating[index % floating.length],
+      0,
+    ],
+  }))
+  const rightOnly = readiness.analyzeElectrodeReadinessForRoute(rightOnlySamples, route, 'right')
+  assert.equal(rightOnly.arrays.length, 1)
+  assert.equal(rightOnly.arrays[0].id, 'right')
+  assert.equal(rightOnly.state === 'ready' || rightOnly.state === 'caution', true)
+})
+
 test('readiness accepts quiet baseline plus sustained contraction', () => {
   const signal = [
     2, 2, 2, 3, 3, 2, 3, 4,
