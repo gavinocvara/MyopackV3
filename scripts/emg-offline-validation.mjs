@@ -199,6 +199,21 @@ test('readiness rejects no-lead floating and saturated inputs', () => {
   assert.equal(result.state, 'not-ready')
 })
 
+test('readiness rejects smooth unplugged ADS noise without source rails', () => {
+  const floating = [34, 52, 38, 61, 44, 67, 49, 71, 46, 63, 39, 58]
+  const samples = Array.from({ length: 30 }, (_, index) => ({
+    timestamp: index * 50,
+    values: [
+      floating[index % floating.length],
+      0,
+      floating[(index + 5) % floating.length],
+      0,
+    ],
+  }))
+  const result = readiness.analyzeElectrodeReadinessForRoute(samples, selection.routeFromPair('pairA'), 'bilateral')
+  assert.equal(result.state, 'not-ready')
+})
+
 test('readiness accepts quiet baseline plus sustained contraction', () => {
   const signal = [
     2, 2, 2, 3, 3, 2, 3, 4,

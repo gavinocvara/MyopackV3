@@ -34,14 +34,17 @@ export interface ElectrodeReadiness {
 
 const MIN_SAMPLES = 24
 const SATURATION_EDGE_HIGH = 96
-const MAX_READY_AVERAGE = 76
-const MAX_READY_BASELINE_AVERAGE = 55
-const MAX_READY_BASELINE_RANGE = 40
+const MAX_READY_AVERAGE = 68
+const MAX_READY_BASELINE_AVERAGE = 42
+const MAX_READY_BASELINE_RANGE = 30
 const MIN_READY_RANGE = 6
 const MIN_READY_RESPONSE_DELTA = 5
 const MIN_READY_ELEVATED_RUN = 3
-const MAX_LARGE_JUMP_RATIO = 0.34
-const MAX_EDGE_HIT_RATIO = 0.18
+const MAX_LARGE_JUMP_RATIO = 0.26
+const MAX_EDGE_HIT_RATIO = 0.16
+const OPEN_LEAD_RANGE = 52
+const OPEN_LEAD_STDDEV = 18
+const OPEN_LEAD_DIRECTION_CHANGE_RATIO = 0.38
 
 export function recommendSensorPair(
   samples: EMGHistoryPoint[],
@@ -213,6 +216,8 @@ function analyzeArray(values: number[], side: 'left' | 'right', channelIndex?: C
   const max = Math.max(...values)
   const average = values.reduce((sum, value) => sum + value, 0) / values.length
   const range = max - min
+  const median = medianOf(values)
+  const stdDev = standardDeviation(values, average)
   const baselineWindow = values.slice(0, Math.max(6, Math.floor(values.length / 4)))
   const baselineMin = Math.min(...baselineWindow)
   const baselineMax = Math.max(...baselineWindow)
@@ -220,6 +225,9 @@ function analyzeArray(values: number[], side: 'left' | 'right', channelIndex?: C
   const baselineRange = baselineMax - baselineMin
   const largeJumps = countLargeJumps(values)
   const largeJumpRatio = values.length > 1 ? largeJumps / (values.length - 1) : 0
+  const directionChangeRatio = values.length > 2
+    ? countDirectionChanges(values) / (values.length - 2)
+    : 0
   const edgeHits = values.filter((value) => value >= SATURATION_EDGE_HIGH).length
   const edgeHitRatio = edgeHits / values.length
   const elevatedThreshold = Math.max(12, baselineAverage + MIN_READY_RESPONSE_DELTA)
@@ -235,6 +243,10 @@ function analyzeArray(values: number[], side: 'left' | 'right', channelIndex?: C
     range > 94 ||
     largeJumpRatio > MAX_LARGE_JUMP_RATIO ||
     edgeHitRatio > MAX_EDGE_HIT_RATIO
+  const openLeadNoise =
+    (range > OPEN_LEAD_RANGE && stdDev > OPEN_LEAD_STDDEV && directionChangeRatio > OPEN_LEAD_DIRECTION_CHANGE_RATIO) ||
+    (median > 52 && range > 24) ||
+    (baselineAverage > MAX_READY_BASELINE_AVERAGE && baselineRange > 18)
   const missingQuietBaseline =
     baselineAverage > MAX_READY_BASELINE_AVERAGE ||
     baselineRange > MAX_READY_BASELINE_RANGE ||
@@ -247,6 +259,7 @@ function analyzeArray(values: number[], side: 'left' | 'right', channelIndex?: C
 
   if (saturated) issues.push(`${capitalize(side)} array is saturated or floating high; attach the red/green leads and reseat the plug.`)
   if (noisyFloating) issues.push(`${capitalize(side)} array is jumping like an open input; secure the snap leads and cable strain relief.`)
+  if (openLeadNoise) issues.push(`${capitalize(side)} array looks like unplugged ADS noise; plug in the snap leads and confirm skin contact.`)
   if (missingQuietBaseline) issues.push(`${capitalize(side)} array needs a quiet low baseline first; keep the muscle relaxed when the check starts.`)
   if (flat) issues.push(`${capitalize(side)} array is too flat; confirm the electrodes are attached.`)
   if (weak) issues.push(`${capitalize(side)} array response is weak; try cleaning skin or pressing the pad edges down.`)
@@ -254,12 +267,12 @@ function analyzeArray(values: number[], side: 'left' | 'right', channelIndex?: C
 
   const baselineScore = missingQuietBaseline ? 0 : 28
   const responseScore = responsive ? Math.min(34, responseDelta * 2.2 + elevatedRun * 2) : Math.min(18, range * 1.4)
-  const stabilityScore = noisyFloating ? 0 : 22
+  const stabilityScore = noisyFloating || openLeadNoise ? 0 : 22
   const saturationScore = saturated ? 0 : 16
   const score = Math.max(0, Math.min(100, Math.round(baselineScore + responseScore + stabilityScore + saturationScore)))
 
   let state: ReadinessState = 'ready'
-  if (saturated || noisyFloating || missingQuietBaseline || flat || weak) state = 'not-ready'
+  if (saturated || noisyFloating || openLeadNoise || missingQuietBaseline || flat || weak) state = 'not-ready'
   else if (!responsive || score < 74) state = 'caution'
 
   return {
@@ -281,6 +294,33 @@ function countLargeJumps(values: number[]): number {
     if (Math.abs(values[i] - values[i - 1]) > 28) jumps += 1
   }
   return jumps
+}
+
+function countDirectionChanges(values: number[]): number {
+  let changes = 0
+  let lastDirection = 0
+  for (let i = 1; i < values.length; i += 1) {
+    const delta = values[i] - values[i - 1]
+    const direction = Math.abs(delta) < 1.5 ? 0 : Math.sign(delta)
+    if (direction !== 0 && lastDirection !== 0 && direction !== lastDirection) {
+      changes += 1
+    }
+    if (direction !== 0) lastDirection = direction
+  }
+  return changes
+}
+
+function medianOf(values: number[]): number {
+  const sorted = [...values].sort((a, b) => a - b)
+  const middle = Math.floor(sorted.length / 2)
+  return sorted.length % 2 === 0
+    ? (sorted[middle - 1] + sorted[middle]) / 2
+    : sorted[middle]
+}
+
+function standardDeviation(values: number[], average: number): number {
+  const variance = values.reduce((sum, value) => sum + Math.pow(value - average, 2), 0) / values.length
+  return Math.sqrt(variance)
 }
 
 function longestRun(values: number[], predicate: (value: number) => boolean): number {

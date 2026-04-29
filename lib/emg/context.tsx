@@ -353,20 +353,11 @@ export function EMGProvider({ children }: { children: ReactNode }) {
     if (isMonitoringRef.current) return
     stopPrecheckTimer()
     setPrecheckSamples([])
+    if (dataSource === 'simulated') return
+
     isPrecheckingRef.current = true
     setIsPrechecking(true)
-
-    if (dataSource === 'simulated') {
-      let current = emgData
-      precheckTimerRef.current = setInterval(() => {
-        current = simulateEMGTick(current)
-        pushPrecheckSample(
-          [current.leftQuad, current.rightQuad, current.leftHam, current.rightHam],
-          Date.now()
-        )
-      }, 50)
-    }
-  }, [dataSource, emgData, pushPrecheckSample, stopPrecheckTimer])
+  }, [dataSource, stopPrecheckTimer])
 
   const startSession = useCallback(() => {
     isMonitoringRef.current = true
