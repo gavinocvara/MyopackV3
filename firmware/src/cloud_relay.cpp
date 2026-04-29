@@ -16,10 +16,9 @@ namespace {
   struct Latched {
     float l1, l2, r1, r2;
     bool monitoring;
-    const char* source;
   };
 
-  Latched latched = { 0, 0, 0, 0, false, "ads" };
+  Latched latched = { 0, 0, 0, 0, false };
   char chLabels[4][MP_LABEL_MAX_LEN] = {
     MP_DEFAULT_LABEL0,
     MP_DEFAULT_LABEL1,
@@ -159,9 +158,8 @@ namespace {
     doc["qsym"] = b.quadSym;
     doc["hsym"] = b.hamSym;
     doc["state"] = latched.monitoring ? "monitoring" : "idle";
-    doc["source"] = latched.source;
 
-    char buf[640];
+    char buf[512];
     size_t n = serializeJson(doc, buf);
     String topic = telemetryTopic();
     if (!mqtt.publish(topic.c_str(), reinterpret_cast<const uint8_t*>(buf), n, false)) {
@@ -192,13 +190,12 @@ void loop() {
 #endif
 }
 
-void update(float l1, float l2, float r1, float r2, bool monitoring, const char* source) {
+void update(float l1, float l2, float r1, float r2, bool monitoring) {
   latched.l1 = l1;
   latched.l2 = l2;
   latched.r1 = r1;
   latched.r2 = r2;
   latched.monitoring = monitoring;
-  latched.source = source ? source : "ads";
 }
 
 void setLabel(uint8_t ch, const char* name) {

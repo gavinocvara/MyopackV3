@@ -373,9 +373,8 @@ void loop() {
     }
   }
 
-  const char* frameSource = sim_force ? "firmware-sim" : "ads";
-  MpTelemetry::update(pct_L1, pct_L2, pct_R1, pct_R2, /*monitoring=*/true, frameSource);
-  MpCloudRelay::update(pct_L1, pct_L2, pct_R1, pct_R2, /*monitoring=*/true, frameSource);
+  MpTelemetry::update(pct_L1, pct_L2, pct_R1, pct_R2, /*monitoring=*/true);
+  MpCloudRelay::update(pct_L1, pct_L2, pct_R1, pct_R2, /*monitoring=*/true);
 
   // Heartbeat log every 5 s
   uint32_t now = millis();
@@ -387,8 +386,7 @@ void loop() {
     leftSampleCount = 0;
     rightSampleCount = 0;
     if (MpWiFi::isConnected()) {
-      Serial.printf("[hb] source=%s L=%.0f Hz R=%.0f Hz ws=%u cloud=%s %s=%.0f %s=%.0f %s=%.0f %s=%.0f\n",
-                    frameSource,
+      Serial.printf("[hb] L=%.0f Hz R=%.0f Hz ws=%u cloud=%s %s=%.0f %s=%.0f %s=%.0f %s=%.0f\n",
                     leftHz, rightHz, MpTelemetry::clientCount(),
                     MpCloudRelay::isConnected() ? "up" : "down",
                     chLabels[0], pct_L1, chLabels[1], pct_L2,

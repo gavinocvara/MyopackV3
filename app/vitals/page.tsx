@@ -100,7 +100,9 @@ export default function VitalsPage() {
         ? 'Firmware SIM'
         : deviceDiagnostics.lastFrameSource === 'ads'
           ? 'ADS live'
-          : 'Waiting'
+          : deviceDiagnostics.lastFrameAt !== null
+            ? 'ADS live'
+            : 'Waiting'
 
   return (
     <motion.div
