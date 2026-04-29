@@ -210,15 +210,10 @@ export default function TodayPage() {
   const hasRecentTelemetry =
     deviceDiagnostics.lastFrameAt !== null &&
     Date.now() - deviceDiagnostics.lastFrameAt < 2500
-  const trustedFrameSource =
-    dataSource === 'relay'
-      ? deviceDiagnostics.lastFrameSource === 'ads'
-      : deviceDiagnostics.lastFrameSource !== 'firmware-sim'
   const liveTelemetryReady =
     liveSource &&
     deviceState === 'connected' &&
     hasRecentTelemetry &&
-    trustedFrameSource &&
     deviceDiagnostics.inputHz >= 5
   const canStartSession = liveTelemetryReady && (readiness.state === 'ready' || readiness.state === 'caution')
   const graphRate = estimateHistoryRateHz(history)
