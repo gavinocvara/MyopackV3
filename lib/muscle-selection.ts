@@ -24,7 +24,10 @@ export interface MuscleRegion {
 //
 // If live board testing proves the chips are physically reversed, set this
 // to true — all routing constants below will flip automatically.
-export const SWAP_PHYSICAL_SIDES = false
+// Live biceps validation on 2026-04-29 showed the UI left/right labels were
+// inverted for the current demo harness. Keep this true unless the physical
+// harness is rewired and revalidated.
+export const SWAP_PHYSICAL_SIDES = true
 
 export const PHYSICAL_LEFT_PRIMARY:   ChannelIndex = SWAP_PHYSICAL_SIDES ? 2 : 0
 export const PHYSICAL_LEFT_SECONDARY: ChannelIndex = SWAP_PHYSICAL_SIDES ? 3 : 1

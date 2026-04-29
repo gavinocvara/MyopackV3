@@ -142,10 +142,10 @@ test('telemetry parser preserves firmware source marker', () => {
 })
 
 test('physical channel route stays left chip vs right chip', () => {
-  assert.deepEqual(Array.from(selection.LEFT_CHANNEL_CANDIDATES), [0, 1])
-  assert.deepEqual(Array.from(selection.RIGHT_CHANNEL_CANDIDATES), [2, 3])
-  assert.deepEqual(plain(selection.routeFromPair('pairA')), { leftIndex: 0, rightIndex: 2 })
-  assert.deepEqual(plain(selection.routeFromPair('pairB')), { leftIndex: 1, rightIndex: 3 })
+  assert.deepEqual(Array.from(selection.LEFT_CHANNEL_CANDIDATES), [2, 3])
+  assert.deepEqual(Array.from(selection.RIGHT_CHANNEL_CANDIDATES), [0, 1])
+  assert.deepEqual(plain(selection.routeFromPair('pairA')), { leftIndex: 2, rightIndex: 0 })
+  assert.deepEqual(plain(selection.routeFromPair('pairB')), { leftIndex: 3, rightIndex: 1 })
 })
 
 test('route values use selected physical channels', () => {
@@ -180,8 +180,8 @@ test('readiness recommendation stays inside each physical side', () => {
       4,
     ],
   }))
-  const route = readiness.recommendChannelRoute(samples, { leftIndex: 0, rightIndex: 2 }, 'bilateral')
-  assert.deepEqual(plain(route), { leftIndex: 1, rightIndex: 2 })
+  const route = readiness.recommendChannelRoute(samples, selection.routeFromPair('pairA'), 'bilateral')
+  assert.deepEqual(plain(route), { leftIndex: 2, rightIndex: 1 })
 })
 
 test('ingestion freezes live EMG when monitoring is stopped but still records precheck', () => {
