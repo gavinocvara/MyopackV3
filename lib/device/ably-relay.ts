@@ -167,6 +167,13 @@ export class AblyRelayClient {
       this.diagnostics.lastError = parsed.warnings[0]
     }
 
+    if (parsed.frame.source === 'firmware-sim') {
+      this.diagnostics.invalidFrames += 1
+      this.diagnostics.lastError = 'Firmware simulation frame ignored; Cloud Relay only accepts live ADS telemetry'
+      this.emitDiagnostics(true)
+      return
+    }
+
     this.noteTelemetryReceipt(parsed.frame)
     this.handlers.onTelemetry?.(parsed.frame)
     this.emitDiagnostics()

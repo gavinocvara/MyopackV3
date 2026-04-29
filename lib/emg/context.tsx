@@ -68,8 +68,10 @@ const LS_SOURCE = 'myopack:data_source'
 const LS_ADDRESS = 'myopack:device_address'
 const MAX_HISTORY_POINTS = 120
 const MAX_PRECHECK_POINTS = 80
+const DEFAULT_LIVE_SOURCE: DataSource = 'relay'
 
 export function EMGProvider({ children }: { children: ReactNode }) {
+  const defaultRelayDeviceId = process.env.NEXT_PUBLIC_MYOPACK_DEVICE_ID || DEFAULT_RELAY_DEVICE_ID
   const [emgData, setEmgData] = useState<EMGData>(DEFAULT_EMG_DATA)
   const [temperature, setTemperature] = useState(DEFAULT_TEMP)
   // Default labels before the firmware hello frame arrives.
@@ -85,9 +87,9 @@ export function EMGProvider({ children }: { children: ReactNode }) {
   const [isMonitoring, setIsMonitoring] = useState(false)
   const [isPrechecking, setIsPrechecking] = useState(false)
   const [sessionTime, setSessionTime] = useState(0)
-  const [dataSource, setDataSourceState] = useState<DataSource>('simulated')
+  const [dataSource, setDataSourceState] = useState<DataSource>(DEFAULT_LIVE_SOURCE)
   const [deviceState, setDeviceState] = useState<DeviceConnectionState>('disconnected')
-  const [deviceAddress, setDeviceAddress] = useState<string>('')
+  const [deviceAddress, setDeviceAddress] = useState<string>(defaultRelayDeviceId)
   const [deviceFirmwareVersion, setDeviceFirmwareVersion] = useState<string | null>(null)
   const [deviceDiagnostics, setDeviceDiagnostics] = useState<DeviceTelemetryDiagnostics>(DEFAULT_DEVICE_DIAGNOSTICS)
 
@@ -111,23 +113,23 @@ export function EMGProvider({ children }: { children: ReactNode }) {
     if (typeof window === 'undefined') return
     try {
       const savedSource = window.localStorage.getItem(LS_SOURCE) as DataSource | null
-      const savedAddr = window.localStorage.getItem(LS_ADDRESS) ?? ''
-      if (savedAddr) setDeviceAddress(savedAddr)
+      const savedAddr = window.localStorage.getItem(LS_ADDRESS) ?? defaultRelayDeviceId
       if (savedSource === 'device' && savedAddr) {
+        setDeviceAddress(savedAddr)
         setDataSourceState('device')
-      } else if (savedSource === 'relay') {
-        setDeviceAddress(savedAddr || process.env.NEXT_PUBLIC_MYOPACK_DEVICE_ID || DEFAULT_RELAY_DEVICE_ID)
-        setDataSourceState('relay')
+      } else {
+        setDeviceAddress(savedAddr || defaultRelayDeviceId)
+        setDataSourceState(DEFAULT_LIVE_SOURCE)
       }
     } catch {
       // ignore storage failures
     }
-  }, [])
+  }, [defaultRelayDeviceId])
 
   useEffect(() => {
     if (typeof window === 'undefined') return
     try {
-      window.localStorage.setItem(LS_SOURCE, dataSource)
+      window.localStorage.setItem(LS_SOURCE, dataSource === 'simulated' ? DEFAULT_LIVE_SOURCE : dataSource)
     } catch {
       // ignore storage failures
     }
