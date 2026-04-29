@@ -26,9 +26,14 @@ import { DEFAULT_RELAY_DEVICE_ID } from '@/lib/device/relay-config'
 import {
   appendHistoryPoint,
   emgDataFromChannels,
-  smoothTelemetryChannels,
   type EMGHistoryPoint,
 } from '@/lib/emg/ingestion'
+import {
+  conditionDisplayFrame,
+  createInitialConditionedStates,
+  type ChannelConfidence,
+  type ConditionedChannelState,
+} from '@/lib/emg/display-conditioning'
 import type {
   DataSource,
   DeviceConnectionState,
@@ -37,13 +42,17 @@ import type {
 } from '@/lib/device/types'
 
 export type { EMGHistoryPoint } from '@/lib/emg/ingestion'
+export type { ChannelConfidence, ChannelConnectionState, DisplaySample } from '@/lib/emg/display-conditioning'
 
 interface EMGContextValue {
   emgData: EMGData
+  displayEmgData: EMGData
   temperature: number
   channelLabels: [string, string, string, string]
   history: EMGHistoryPoint[]
+  displayHistory: EMGHistoryPoint[]
   precheckSamples: EMGHistoryPoint[]
+  displayChannelConfidence: [ChannelConfidence, ChannelConfidence, ChannelConfidence, ChannelConfidence]
   isMonitoring: boolean
   isPrechecking: boolean
   sessionTime: number
@@ -74,6 +83,7 @@ const DEFAULT_LIVE_SOURCE: DataSource = 'relay'
 export function EMGProvider({ children }: { children: ReactNode }) {
   const defaultRelayDeviceId = process.env.NEXT_PUBLIC_MYOPACK_DEVICE_ID || DEFAULT_RELAY_DEVICE_ID
   const [emgData, setEmgData] = useState<EMGData>(DEFAULT_EMG_DATA)
+  const [displayEmgData, setDisplayEmgData] = useState<EMGData>(DEFAULT_EMG_DATA)
   const [temperature, setTemperature] = useState(DEFAULT_TEMP)
   // Default labels before the firmware hello frame arrives.
   // ch[0]/ch[1] = U1 (CS=21) = left body side; ch[2]/ch[3] = U4 (CS=22) = right body side.
@@ -84,7 +94,19 @@ export function EMGProvider({ children }: { children: ReactNode }) {
     'Right Alt',
   ])
   const [history, setHistory] = useState<EMGHistoryPoint[]>([])
+  const [displayHistory, setDisplayHistory] = useState<EMGHistoryPoint[]>([])
   const [precheckSamples, setPrecheckSamples] = useState<EMGHistoryPoint[]>([])
+  const [displayChannelConfidence, setDisplayChannelConfidence] = useState<[
+    ChannelConfidence,
+    ChannelConfidence,
+    ChannelConfidence,
+    ChannelConfidence,
+  ]>(() => createInitialConditionedStates().map((state) => state.confidence) as [
+    ChannelConfidence,
+    ChannelConfidence,
+    ChannelConfidence,
+    ChannelConfidence,
+  ])
   const [isMonitoring, setIsMonitoring] = useState(false)
   const [isPrechecking, setIsPrechecking] = useState(false)
   const [sessionTime, setSessionTime] = useState(0)
@@ -101,7 +123,12 @@ export function EMGProvider({ children }: { children: ReactNode }) {
   const relayClientRef = useRef<AblyRelayClient | null>(null)
   const isMonitoringRef = useRef(false)
   const isPrecheckingRef = useRef(false)
-  const smoothedChannelsRef = useRef<[number, number, number, number] | null>(null)
+  const displayConditioningRef = useRef<[
+    ConditionedChannelState,
+    ConditionedChannelState,
+    ConditionedChannelState,
+    ConditionedChannelState,
+  ]>(createInitialConditionedStates())
 
   useEffect(() => {
     isMonitoringRef.current = isMonitoring
@@ -174,14 +201,26 @@ export function EMGProvider({ children }: { children: ReactNode }) {
     setIsPrechecking(false)
     setSessionTime(0)
     setHistory([])
+    setDisplayHistory([])
     setPrecheckSamples([])
     setEmgData(DEFAULT_EMG_DATA)
+    setDisplayEmgData(DEFAULT_EMG_DATA)
     setTemperature(DEFAULT_TEMP)
-    smoothedChannelsRef.current = null
+    displayConditioningRef.current = createInitialConditionedStates()
+    setDisplayChannelConfidence(displayConditioningRef.current.map((state) => state.confidence) as [
+      ChannelConfidence,
+      ChannelConfidence,
+      ChannelConfidence,
+      ChannelConfidence,
+    ])
   }, [])
 
   const pushHistory = useCallback((values: [number, number, number, number], timestamp = Date.now()) => {
     setHistory((prev) => appendHistoryPoint(prev, values, timestamp, MAX_HISTORY_POINTS))
+  }, [])
+
+  const pushDisplayHistory = useCallback((values: [number, number, number, number], timestamp = Date.now()) => {
+    setDisplayHistory((prev) => appendHistoryPoint(prev, values, timestamp, MAX_HISTORY_POINTS))
   }, [])
 
   const pushPrecheckSample = useCallback((values: [number, number, number, number], timestamp = Date.now()) => {
@@ -215,11 +254,15 @@ export function EMGProvider({ children }: { children: ReactNode }) {
 
     if (!isMonitoringRef.current) return
 
-    const smoothed = smoothTelemetryChannels(smoothedChannelsRef.current, values)
-    smoothedChannelsRef.current = smoothed
-    setEmgData(emgDataFromChannels(smoothed, timestamp))
-    pushHistory(smoothed, timestamp)
-  }, [pushHistory, pushPrecheckSample])
+    setEmgData(emgDataFromChannels(values, timestamp))
+    pushHistory(values, timestamp)
+
+    const conditioned = conditionDisplayFrame(values, timestamp, displayConditioningRef.current)
+    displayConditioningRef.current = conditioned.states
+    setDisplayEmgData(emgDataFromChannels(conditioned.sample.values, timestamp))
+    setDisplayChannelConfidence(conditioned.sample.confidence)
+    pushDisplayHistory(conditioned.sample.values, timestamp)
+  }, [pushDisplayHistory, pushHistory, pushPrecheckSample])
 
   const ensureClient = useCallback((): DeviceClient => {
     if (deviceClientRef.current) return deviceClientRef.current
@@ -327,17 +370,18 @@ export function EMGProvider({ children }: { children: ReactNode }) {
     simTimerRef.current = setInterval(() => {
       setEmgData((prev) => {
         const next = simulateEMGTick(prev)
-        pushHistory(
-          [next.leftQuad, next.rightQuad, next.leftHam, next.rightHam],
-          Date.now()
-        )
+        const timestamp = Date.now()
+        const values: [number, number, number, number] = [next.leftQuad, next.rightQuad, next.leftHam, next.rightHam]
+        pushHistory(values, timestamp)
+        setDisplayEmgData(next)
+        pushDisplayHistory(values, timestamp)
         return next
       })
       setTemperature((prev) =>
         constrain(prev + (Math.random() * 0.2 - 0.1), 31.0, 34.0)
       )
     }, 50)
-  }, [pushHistory, stopSimTimers])
+  }, [pushDisplayHistory, pushHistory, stopSimTimers])
 
   const resetPrecheck = useCallback(() => {
     setPrecheckSamples([])
@@ -374,7 +418,14 @@ export function EMGProvider({ children }: { children: ReactNode }) {
     stopSessionTimer()
     setSessionTime(0)
     setHistory([])
-    smoothedChannelsRef.current = null
+    setDisplayHistory([])
+    displayConditioningRef.current = createInitialConditionedStates()
+    setDisplayChannelConfidence(displayConditioningRef.current.map((state) => state.confidence) as [
+      ChannelConfidence,
+      ChannelConfidence,
+      ChannelConfidence,
+      ChannelConfidence,
+    ])
     sessionTimerRef.current = setInterval(() => {
       setSessionTime((t) => t + 1)
     }, 1000)
@@ -388,7 +439,6 @@ export function EMGProvider({ children }: { children: ReactNode }) {
     isMonitoringRef.current = false
     stopSessionTimer()
     stopSimTimers()
-    smoothedChannelsRef.current = null
   }, [stopSessionTimer, stopSimTimers])
 
   const toggleMonitoring = useCallback(() => {
@@ -430,10 +480,13 @@ export function EMGProvider({ children }: { children: ReactNode }) {
 
   const value: EMGContextValue = {
     emgData,
+    displayEmgData,
     temperature,
     channelLabels,
     history,
+    displayHistory,
     precheckSamples,
+    displayChannelConfidence,
     isMonitoring,
     isPrechecking,
     sessionTime,
